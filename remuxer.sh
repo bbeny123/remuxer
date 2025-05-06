@@ -4,7 +4,7 @@ shopt -s expand_aliases
 
 readonly N=$(tput sgr0) B=$(tput bold) U=$(tput smul)
 readonly BU="$B$U"
-readonly REMUXER="$B$(basename "$0")$N" VERSION="1.0.1"
+readonly REMUXER="$B$(basename "$0")$N" VERSION="1.0.2"
 readonly START_TIME=$(date +%s%1N)
 readonly DEBUG_LOG='0'
 readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/tools"
@@ -752,7 +752,7 @@ inject_rpu() {
   log "Creating hybrid RPU: '$(basename "$output")'..." 1
 
   if [[ ! -f "$output" ]]; then
-    local rpu_base=$(to_rpu "$input_base") rpu_synced
+    local rpu_base=$(to_rpu "$input_base") rpu_synced rpu_cm4
 
     if [ "$skip_sync" = 1 ]; then
       log "Skipping RPU sync..."
@@ -762,14 +762,14 @@ inject_rpu() {
       log ""
     fi
 
-    cm4_input "$rpu_synced" && rpu_base=$(to_cm4_rpu "$rpu_base")
+    cm4_input "$rpu_synced" && rpu_cm4=$(to_cm4_rpu "$rpu_base")
 
     local -r sync_config=$(tmp_file "$rpu_synced" 'json' 'EDITOR-SYNC')
     rpu_synced=$(realpath --relative-to="$(pwd)" "$rpu_synced")
     rpu_synced=$(windows_safe_path "$rpu_synced")
     echo "{ \"source_rpu\": \"$rpu_synced\", \"rpu_levels\": [$RPU_LEVELS] }" >"$sync_config"
 
-    if ! dovi_tool editor -i "$rpu_base" -j "$sync_config" -o "$output" >&2; then
+    if ! dovi_tool editor -i "${rpu_cm4:-"$rpu_base"}" -j "$sync_config" -o "$output" >&2; then
       log_kill "Error while injecting RPU levels: $RPU_LEVELS of '$(basename "$rpu_synced")' into '$(basename "$rpu_base")'" 1
     fi
 
