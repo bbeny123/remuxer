@@ -4,7 +4,7 @@ shopt -s expand_aliases
 
 readonly N=$(tput sgr0) B=$(tput bold) U=$(tput smul)
 readonly BU="$B$U"
-readonly REMUXER="$B$(basename "$0")$N" VERSION="1.0.0"
+readonly REMUXER="$B$(basename "$0")$N" VERSION="1.0.1"
 readonly START_TIME=$(date +%s%1N)
 readonly DEBUG_LOG='0'
 readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/tools"
@@ -180,16 +180,27 @@ out_hybrid() {
   out_file "$input_base" "$ext" "HYBRID-${RPU_LEVELS//[^0-9]/}-$input_name" "$output"
 }
 
-rpu_cuts_file() {
-  local -r input="$1" short_sample="$2" out_dir="$3" output="$4"
-  local dir="$OUT_DIR" suffix='CUTS'
+rpu_export_file() {
+  local dir="$1" input="$2" short_sample="$3" ext="$4" suffix="$5" output="$6" out_dir="$7"
 
   if [ "$short_sample" = 1 ]; then
     suffix+="-${EXTRACT_SHORT_SEC}"
     [ "$out_dir" != 1 ] && dir="$TMP_DIR"
   fi
 
-  generate_file "$dir" "$input" 'txt' "$suffix" "$output"
+  generate_file "$dir" "$input" "$ext" "$suffix" "$output"
+}
+
+rpu_cuts_file() {
+  local -r input="$1" short_sample="$2" out_dir="$3" output="$4"
+
+  rpu_export_file "$OUT_DIR" "$input" "$short_sample" 'txt' "CUTS" "$output" "$out_dir"
+}
+
+rpu_l5_file() {
+  local -r input="$1" short_sample="$2" output="$3"
+
+  rpu_export_file "$TMP_DIR" "$input" "$short_sample" 'json' "L5" "$output"
 }
 
 file_exists() {
@@ -305,14 +316,35 @@ to_cm4_rpu() {
 }
 
 to_rpu_json() {
-  local input="$1" short_sample="$2" output="$3" cuts_output="$4"
+  local input="$1" short_sample="$2" quick="$3" cuts_output="$4" l5_output="$5" output="$6" suffix=""
+  [ "$quick" = 1 ] && suffix+="FRAME_24" || suffix+="ALL"
+  [ "$short_sample" = 1 ] && suffix+="-${EXTRACT_SHORT_SEC}"
 
   input=$(to_rpu "$input" "$short_sample" 1)
-  output=$(tmp_file "$input" 'json' 'ALL' "$output")
+  output=$(tmp_file "$input" 'json' "$suffix" "$output")
 
   if [[ ! -f "$output" ]]; then
     cuts_output=$(rpu_cuts_file "$input" "$short_sample" 0 "$cuts_output")
-    dovi_tool export -i "$input" --data all="$output" --data scenes="$cuts_output" >/dev/null
+    l5_output=$(rpu_l5_file "$input" "$short_sample" "$l5_output")
+    if [ "$quick" = 1 ]; then
+      dovi_tool info -i "$input" -f 24 >"$output"
+      dovi_tool export -i "$input" --data scenes="$cuts_output" --data level5="$l5_output" >/dev/null
+    else
+      dovi_tool export -i "$input" --data all="$output" --data scenes="$cuts_output" --data level5="$l5_output" >/dev/null
+    fi
+  fi
+
+  echo "$output"
+}
+
+to_rpu_l5() {
+  local input="$1" short_sample="$2" output="$3"
+
+  input=$(to_rpu "$input" "$short_sample" 1)
+  output=$(rpu_l5_file "$input" "$short_sample" "$output")
+
+  if [[ ! -f "$output" ]]; then
+    dovi_tool export -i "$input" --data level5="$output" >/dev/null
   fi
 
   echo "$output"
@@ -406,8 +438,9 @@ lossless_audio_info() {
 }
 
 track_info() {
-  local -r media_info="$1" json_path="$2"
-  echo "$media_info" | jq -r "$json_path // \"\""
+  local -r input="$1"
+  local -r inform='%Width%|%Height%|%FrameRate%|%Duration%|%HDR_Format%|%HDR_Format_Profile%|%MaxCLL%|%MaxFALL%|%MasteringDisplay_ColorPrimaries%|%MasteringDisplay_Luminance%'
+  mediainfo "$input" --Inform="Video;$inform|\n" | head -n 1
 }
 
 video_info() {
@@ -417,57 +450,57 @@ video_info() {
     return 1
   fi
 
-  local -r media_info=$(mediainfo "$input" --output=JSON | jq .media.track[1])
+  local track_info=()
+  IFS='|' read -ra track_info < <(track_info "$input")
 
-  info[width]=$(track_info "$media_info" '.Width')
-  info[height]=$(track_info "$media_info" '.Height')
-  info[fps]=$(track_info "$media_info" '.FrameRate')
-  info[duration]=$(track_info "$media_info" '.Duration')
+  info[width]="${track_info[0]}"
+  info[height]="${track_info[1]}"
+  info[fps]="${track_info[2]}"
+  info[duration]="${track_info[3]}"
 
-  info[hdr_format]=$(track_info "$media_info" '.HDR_Format')
-  info[hdr_profile]=$(track_info "$media_info" '.HDR_Format_Profile')
+  info[hdr_format]="${track_info[4]}"
+  info[hdr_profile]="${track_info[5]}"
 
-  info[max_cll]=$(track_info "$media_info" '.MaxCLL' | grep -oE '^[0-9]+')
-  info[max_fall]=$(track_info "$media_info" '.MaxFALL' | grep -oE '^[0-9]+')
+  info[max_cll]="${track_info[6]%%[^0-9]*}"
+  info[max_fall]="${track_info[7]%%[^0-9]*}"
 
-  info[mdcp]=$(track_info "$media_info" '.MasteringDisplay_ColorPrimaries')
-  info[mdl]=$(track_info "$media_info" '.MasteringDisplay_Luminance' | sed 's|cd/m2|nits|g')
+  info[mdcp]="${track_info[8]}"
+  info[mdl]="${track_info[9]//cd\/m2/nits}"
 
   info[lossless]=$(lossless_audio_info "$input")
 }
 
 l5_offset() {
-  local -r rpu_info="$1" edge="$2"
+  local -r input="$1" short_sample="$2" edge="$3"
+  local -r rpu_l5=$(to_rpu_l5 "$input" "$short_sample")
 
-  local -r edge_offsets=$(echo "$rpu_info" | grep "active_area_$edge" | grep -oE "[0-9]+" || echo 'N/A')
+  local -r edge_offsets=$(grep "$edge" "$rpu_l5" | sort -u | grep -oE "[0-9]+" || echo 'N/A')
   local -r offset_min=$(echo "$edge_offsets" | head -n1) offset_max=$(echo "$edge_offsets" | tail -n1)
 
   [ "$offset_min" = "$offset_max" ] && echo "$offset_min" || echo "($offset_min - $offset_max)"
 }
 
 rpu_info() {
-  local input="$1" short_sample="$2"
+  local input="$1" short_sample="$2" quick="$3" rpu_json
 
   input=$(to_rpu "$input" "$short_sample" 1)
+  rpu_json=$(to_rpu_json "$input" "$short_sample" 1)
 
-  local -r rpu_json=$(to_rpu_json "$input" "$short_sample")
-  local -r regex='("target_display_index":[1-4][4-9]?)|("source_primary_index":[02])|("active_area_[a-z]+_offset":[0-9]+)|(cmv40)|("dovi_profile":[0-9]+)'
-  local -r rpu_info=$(grep -oE "$regex" "$rpu_json" | sort -u)
+  info[dv_profile]=$(grep 'dovi_profile' "$rpu_json" | grep -oE '[0-9]+')
 
-  info[dv_profile]=$(echo "$rpu_info" | grep 'dovi_profile' | grep -oE '[0-9]+')
+  if grep -q 'cmv40' "$rpu_json"; then
+    if [ "$quick" != 1 ]; then
+      rpu_json=$(to_rpu_json "$input" "$short_sample" 0)
+      local -r rpu_info=$(grep -oE '("target_display_index":[124][4578]?)|("source_primary_index":[02])' "$rpu_json" | sort -u)
+      local -r l8_tdis=$(echo "$rpu_info" | grep 'target_display_index') l9_spis=$(echo "$rpu_info" | grep 'source_primary_index')
+    else
+      local -r l8_tdis=$(grep 'target_display_index' "$rpu_json") l9_spis=$(grep 'source_primary_index' "$rpu_json")
+    fi
 
-  info[l5_top]=$(l5_offset "$rpu_info" 'top')
-  info[l5_bottom]=$(l5_offset "$rpu_info" 'bottom')
-  info[l5_left]=$(l5_offset "$rpu_info" 'left')
-  info[l5_right]=$(l5_offset "$rpu_info" 'right')
-
-  if echo "$rpu_info" | grep -q 'cmv40'; then
-    local -r l8_tdis=$(echo "$rpu_info" | grep 'target') l9_spis=$(echo "$rpu_info" | grep 'source')
-
-    [[ "$l8_tdis" == *:1* ]] && info[l8_trims]="100 nits"
-    [[ "$l8_tdis" == *24* || "$l8_tdis" == *25* ]] && info[l8_trims]+="${info[l8_trims]:+, }300 nits"
-    [[ "$l8_tdis" == *27* || "$l8_tdis" == *28* ]] && info[l8_trims]+="${info[l8_trims]:+, }600 nits"
-    [[ "$l8_tdis" == *:4* ]] && info[l8_trims]+="${info[l8_trims]:+, }1000 nits"
+    [[ "$l8_tdis" =~ :\ ?1 ]] && info[l8_trims]="100 nits"
+    [[ "$l8_tdis" =~ :\ ?2[45] ]] && info[l8_trims]+="${info[l8_trims]:+, }300 nits"
+    [[ "$l8_tdis" =~ :\ ?2[78] ]] && info[l8_trims]+="${info[l8_trims]:+, }600 nits"
+    [[ "$l8_tdis" =~ :\ ?4 ]] && info[l8_trims]+="${info[l8_trims]:+, }1000 nits"
 
     case "$l9_spis" in
     *2*) info[l9_mdp]='BT2020' ;;
@@ -475,6 +508,11 @@ rpu_info() {
     *) info[l9_mdp]='' ;;
     esac
   fi
+
+  info[l5_top]=$(l5_offset "$input" "$short_sample" 'top')
+  info[l5_bottom]=$(l5_offset "$input" "$short_sample" 'bottom')
+  info[l5_left]=$(l5_offset "$input" "$short_sample" 'left')
+  info[l5_right]=$(l5_offset "$input" "$short_sample" 'right')
 
   local -r cut1=$(rpu_cuts_line "$input" 1 "$short_sample")
 
@@ -494,7 +532,7 @@ rpu_info() {
 }
 
 info() {
-  local input="$1" short_sample="$2" short_input="$3"
+  local input="$1" short_sample="$2" short_input="$3" quick="${4:-1}"
 
   if ! check_extension "$input" '.mkv .mp4 .hevc .bin'; then
     log "Cannot print info for '$(basename "$input")' (unsupported file format), skipping..." 1
@@ -503,13 +541,14 @@ info() {
 
   local -r rpu=$(to_rpu "$input" "$short_sample")
 
-  log "Printing info for: '$(basename "$input")' ..." 1
+  [ "$quick" = 0 ] && quick=''
+  log "Printing ${quick:+quick }info for: '$(basename "$input")' ..." 1
 
   [[ "$short_sample" = 1 && "$short_input" != 1 ]] && check_extension "$input" '.bin' && short_sample=0
 
   declare -A info
   video_info "$input"
-  rpu_info "$rpu" "$short_sample"
+  rpu_info "$rpu" "$short_sample" "$quick"
 
   [ "$INFO_L1_PLOT" = 1 ] && plot_l1 "$input" "$short_sample" 1
 
@@ -677,7 +716,7 @@ editor_config_json() {
 }
 
 sync_rpu() {
-  local input="$1" input_base="$2" frame_shift="$3" output="$4"
+  local input="$1" input_base="$2" frame_shift="$3" info="$4" output="$5"
   local -r rpu=$(to_rpu "$input") rpu_base=$(to_rpu "$input_base")
   local -r input_name=$(basename "$input") base_name=$(basename "$input_base")
 
@@ -698,7 +737,7 @@ sync_rpu() {
     log "The RPU file: '$output' already exists, skipping..."
   fi
 
-  if [ "$INFO_INTERMEDIATE" = 1 ]; then
+  if [[ "$info" = 1 && "$INFO_INTERMEDIATE" = 1 ]]; then
     info "$rpu_base" >&2
     info "$output" >&2
   fi
@@ -719,7 +758,7 @@ inject_rpu() {
       log "Skipping RPU sync..."
       rpu_synced=$(to_rpu "$input")
     else
-      rpu_synced=$(sync_rpu "$input" "$rpu_base" "$frame_shift")
+      rpu_synced=$(sync_rpu "$input" "$rpu_base" "$frame_shift" 0)
       log ""
     fi
 
@@ -735,14 +774,15 @@ inject_rpu() {
     fi
 
     log "RPU levels: $RPU_LEVELS of '$(basename "$rpu_synced")' successfully injected into '$(basename "$rpu_base")' - output file: '$output'" 1
+
+    if [ "$INFO_INTERMEDIATE" = 1 ]; then
+      info "$rpu_base" >&2
+      info "$output" >&2
+    fi
   elif [ "$exit_if_exists" = 1 ]; then
     log_kill "The hybrid RPU file: '$output' already exists" 2
   else
     log "The hybrid RPU file: '$output' already exists, skipping..."
-  fi
-
-  if [ "$INFO_INTERMEDIATE" = 1 ]; then
-    info "$output" >&2
   fi
 
   echo "$output"
@@ -1507,12 +1547,12 @@ parse_args() {
 
   for input in "${inputs[@]}"; do
     case "$cmd" in
-    info) info "$input" "$sample" ;;
+    info) info "$input" "$sample" 0 0 ;;
     plot) plot_l1 "$input" "$sample" 0 "$output" ;;
     cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;
     extract) to_rpu "$input" 0 0 "$output" "$INFO_INTERMEDIATE" >/dev/null ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
-    sync) sync_rpu "$input" "$base_input" "$frame_shift" "$output" >/dev/null ;;
+    sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
     inject) inject "$input" "$base_input" "$skip_sync" "$frame_shift" "$output_format" "$output" "$subs" "$title" ;;
     subs) subs "$input" "$output" ;;
     remux) remux "$input" "$output_format" "$output" "$hevc" "$subs" "$title" ;;
