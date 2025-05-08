@@ -1,3 +1,7 @@
+### 1.0.3
+
+- Added experimental support for `.m2ts` and `.ts` inputs
+
 ### 1.0.2
 
 - `inject` command logging improvements

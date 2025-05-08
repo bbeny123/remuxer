@@ -4,7 +4,7 @@ shopt -s expand_aliases
 
 readonly N=$(tput sgr0) B=$(tput bold) U=$(tput smul)
 readonly BU="$B$U"
-readonly REMUXER="$B$(basename "$0")$N" VERSION="1.0.2"
+readonly REMUXER="$B$(basename "$0")$N" VERSION="1.0.3"
 readonly START_TIME=$(date +%s%1N)
 readonly DEBUG_LOG='0'
 readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/tools"
@@ -37,15 +37,15 @@ EXTRACT_SHORT_SEC='23'
 FFMPEG_STRICT=1
 
 declare -A commands=(
-  [info]="       Show Dolby Vision information       | xtsp      | .mkv, .mp4, .hevc, .bin"
-  [plot]="       Plot L1 dynamic brightness metadata | xtos      | .mkv, .mp4, .hevc, .bin"
-  [cuts]="       Extract scene-cut frame list(s)     | xtos      | .mkv, .mp4, .hevc, .bin"
-  [extract]="    Extract Dolby Vision RPU(s)         | xtonp     | .mkv, .mp4, .hevc"
-  [frame-shift]="Calculate frame shift               | b         | .mkv, .mp4, .hevc, .bin"
-  [sync]="       Synchronize Dolby Vision RPU files  | bofnp     | .mkv, .mp4, .hevc, .bin"
-  [inject]="     Sync & Inject Dolby Vision RPU      | boeqflnmp | .mkv, .mp4, .hevc, .bin"
+  [info]="       Show Dolby Vision information       | xtsp      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="       Plot L1 dynamic brightness metadata | xtos      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [cuts]="       Extract scene-cut frame list(s)     | xtos      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [extract]="    Extract Dolby Vision RPU(s)         | xtonp     | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [frame-shift]="Calculate frame shift               | b         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [sync]="       Synchronize Dolby Vision RPU files  | bofnp     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [inject]="     Sync & Inject Dolby Vision RPU      | boeqflnmp | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [subs]="       Extract .srt subtitles              | tocm      | .mkv"
-  [remux]="      Remux .mkv or .mp4 file(s)          | xtoemr    | .mkv, .mp4"
+  [remux]="      Remux video file(s)                 | xtoemr    | .mkv, .mp4, .m2ts, .ts"
 )
 declare -A cmd_description=(
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
@@ -72,6 +72,18 @@ cmd_info() {
   local info="${commands[$1]}" col="${2:-1}"
   for ((col; col > 1; col--)); do info="${info#*|}"; done
   trim "${info%%|*}"
+}
+
+cmd_output_formats() {
+  local allowed_formats=$(cmd_info "$1" 3)
+  allowed_formats=" ${allowed_formats//./},"
+
+  if [[ "$allowed_formats" == *'ts,'* ]]; then
+    allowed_formats="${allowed_formats// m2ts,/}"
+    allowed_formats="${allowed_formats// ts,/}"
+  fi
+
+  trim "${allowed_formats%,}"
 }
 
 echo1() {
@@ -240,7 +252,7 @@ to_hevc() {
     return
   fi
 
-  check_extension "$input" '.mkv .mp4' 1
+  check_extension "$input" '.mkv .mp4 .m2ts .ts' 1
   output=$(tmp_file "$input" 'hevc' 'HEVC' "$output")
   local -r input_name=$(basename "$input")
 
@@ -262,7 +274,7 @@ to_rpu() {
     return
   fi
 
-  check_extension "$input" '.mkv .mp4 .hevc' 1
+  check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc' 1
   local -r input_name=$(basename "$input")
 
   if [ "$short_sample" = 1 ]; then
@@ -280,7 +292,9 @@ to_rpu() {
     if [[ -z "$short_cmd" ]] && check_extension "$input" ".hevc"; then
       dovi_tool extract-rpu -o "$output" "$input" >/dev/null
     else
-      ffmpeg -i "$input" -map 0:0 -c copy -strict -2$short_cmd -f hevc - | dovi_tool extract-rpu -o "$output" - >/dev/null
+      if ! ffmpeg -i "$input" -map 0:0 -c copy -strict -2$short_cmd -f hevc - | dovi_tool extract-rpu -o "$output" - >/dev/null; then
+        log_kill "Error while extracting RPU for: '$input_name'"
+      fi
     fi
 
     log "RPU for: '$input_name' extracted - output file: '$output'"
@@ -412,7 +426,7 @@ plot_l1() {
   log "Plotting L1 metadata for: '$input_name' ..." 1
 
   if [[ ! -f "$plot" ]]; then
-    if [ "$short_sample" = 1 ] && check_extension "$input" '.mkv .mp4 .hevc'; then
+    if [ "$short_sample" = 1 ] && check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc'; then
       local -r title="$(basename "$input") (sample duration: ${EXTRACT_SHORT_SEC}s)"
     else
       local -r title=$(basename "$rpu")
@@ -446,7 +460,7 @@ track_info() {
 video_info() {
   local -r input="$1"
 
-  if ! file_exists "$input" "input" || ! check_extension "$input" ".mkv .mp4 .hevc"; then
+  if ! file_exists "$input" "input" || ! check_extension "$input" ".mkv .mp4 .m2ts .ts .hevc"; then
     return 1
   fi
 
@@ -534,7 +548,7 @@ rpu_info() {
 info() {
   local input="$1" short_sample="$2" short_input="$3" quick="${4:-1}"
 
-  if ! check_extension "$input" '.mkv .mp4 .hevc .bin'; then
+  if ! check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin'; then
     log "Cannot print info for '$(basename "$input")' (unsupported file format), skipping..." 1
     return
   fi
@@ -564,7 +578,7 @@ info() {
   echo "  1st Frame is a Scene Cut: ${info[cuts_first]}"
   echo "  Consecutive Scene Cuts: ${info[cuts_cons]}"
 
-  if check_extension "$input" '.mkv .mp4 .hevc'; then
+  if check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc'; then
     local base_layer
 
     case "${info[dv_profile]}" in
@@ -838,6 +852,7 @@ auto_target_format() {
 
   local -r target_format="${input##*.}"
 
+  check_extension "$target_format" ".m2ts .ts" && target_format='mkv'
   check_extension "$target_format" '.mkv' && mp4_preferred "$input" "$hevc" "$short_sample" && echo "mp4" && return 0
 
   echo "${target_format,,}"
@@ -928,6 +943,7 @@ metadata_audio_title() {
   [[ -z "$id" ]] && return
 
   case "${infos[1]}" in
+  *'DTS-UHD'*) format="DTS:X IMAX" ;;
   *'DTS XLL X IMAX'*) format="DTS:X IMAX" ;;
   *'DTS XLL X'*) format="DTS:X" ;;
   *'DTS XLL'*) format="DTS-HD MA" ;;
@@ -1069,7 +1085,7 @@ remux_mkv() {
 remux() {
   local input="$1" output_format="$2" output="$3" hevc="$4" subs="$5" title="$6" validate_output_format="${7:-1}"
 
-  check_extension "$input" '.mkv .mp4' 1
+  check_extension "$input" '.mkv .mp4 .m2ts .ts' 1
   [[ -n "$hevc" ]] && check_extension "$hevc" '.hevc' 1
 
   if [[ -z "$output_format" || "$validate_output_format" != 0 ]]; then
@@ -1094,8 +1110,8 @@ remux() {
 inject() {
   local input="$1" input_base="$2" skip_sync="$3" frame_shift="$4" output_format="$5" output="$6" subs="$7" title="$8"
 
-  check_extension "$input_base" '.mkv .mp4 .hevc .bin' 1
-  check_extension "$input" '.mkv .mp4 .hevc .bin' 1
+  check_extension "$input_base" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
+  check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
 
   output_format=$(target_format "$input_base" "$output_format" "$output" '.mkv .mp4 .hevc .bin')
 
@@ -1233,7 +1249,7 @@ help() {
   help1 "-o, --output <OUTPUT>         Output file path [default: ${B}generated$N]
                                        $multiple_inputs"
   help1 "-e, --output-format <FORMAT>  Output format [default: ${B}auto-detected$N]
-                                       [allowed values: $B${formats//./}$N]"
+                                       [allowed values: $B$(cmd_output_formats "$cmd")$N]"
   help1 "-s, --sample                  Use a ${EXTRACT_SHORT_SEC}s sample instead of the full input file
                                        ${bin:+"[ignored for $B.bin$N inputs]"}"
   help1 "-q, --skip-sync               Skip RPUs sync (assumes RPUs are already in sync)"
@@ -1488,7 +1504,7 @@ parse_args() {
     -x | --formats)                 formats=$(parse_option "$2" "$formats" "$cmd" "$1" 'x' "${allowed_formats//./}" '' 1) ;;
     -t | --input-type)           input_type=$(parse_option "$2" "$input_type" "$cmd" "$1" 't' 'shows, movies') ;;
     -o | --output)                   output=$(parse_file "$2" "$output" "$cmd" "$1" 'o' '' 0) ;;
-    -e | --output-format)     output_format=$(parse_option "$2" "$output_format" "$cmd" "$1" 'e' "${allowed_formats//./}") ;;
+    -e | --output-format)     output_format=$(parse_option "$2" "$output_format" "$cmd" "$1" 'e' "$(cmd_output_formats "$cmd")") ;;
     -f | --frame-shift)         frame_shift=$(parse_option "$2" "$frame_shift" "$cmd" "$1" 'f' '<number>' '-?[0-9]+') ;;
     -l | --rpu-levels)           rpu_levels=$(parse_option "$2" "$rpu_levels" "$cmd" "$1" 'l' '1-6, 8-11, 254, 255' '([1-689]|1[01]|25[45])' 1) ;;
     -n | --info)                       info=$(parse_option "$2" "$info" "$cmd" "$1" 'n' '0, 1') ;;

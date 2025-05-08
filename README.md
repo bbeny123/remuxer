@@ -102,7 +102,7 @@ Commands:
   sync           Synchronize Dolby Vision RPU files
   inject         Sync & Inject Dolby Vision RPU
   subs           Extract .srt subtitles
-  remux          Remux .mkv or .mp4 file(s)
+  remux          Remux video file(s)
 
 Options:
   -h, --help     Show help (use '--help' for a detailed version)
