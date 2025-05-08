@@ -258,7 +258,7 @@ Options:
 
 ### `remux` command
 
-**Description:** Remux `.mkv` or `.mp4` file(s)
+**Description:** Remux `.mkv`, `.mp4`, `.m2ts` or `.ts` file(s)
 
 ```bash
 Usage: remuxer remux [OPTIONS] [INPUT...]
