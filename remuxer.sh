@@ -1225,7 +1225,7 @@ help() {
   *[elc]*) help_left+=9 ;;
   *m*) help_left+=8 ;;
   *[fx]*) help_left+=6 ;;
-  *b*) help_left+=5 ;;
+  *bs*) help_left+=5 ;;
   *t*) help_left+=4 ;;
   *o*) help_left+=2 ;;
   esac
@@ -1250,7 +1250,8 @@ help() {
                                        $multiple_inputs"
   help1 "-e, --output-format <FORMAT>  Output format [default: ${B}auto-detected$N]
                                        [allowed values: $B$(cmd_output_formats "$cmd")$N]"
-  help1 "-s, --sample                  Use a ${EXTRACT_SHORT_SEC}s sample instead of the full input file
+  help1 "-s, --sample [<SECONDS>]      Process only the first N seconds of input
+                                       [default sample duration: ${EXTRACT_SHORT_SEC}s]
                                        ${bin:+"[ignored for $B.bin$N inputs]"}"
   help1 "-q, --skip-sync               Skip RPUs sync (assumes RPUs are already in sync)"
   help1 "-f, --frame-shift <SHIFT>     Frame shift value [default: ${B}auto-calculated$N]
@@ -1492,15 +1493,21 @@ parse_args() {
 
   [[ "$cmd_options" == *t* ]] && batch=1
 
-  local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir
+  local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir sample_duration
   local frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
     -h | --help) show_help "$cmd" "$1"; return ;;
     -v | --version) version; return ;;
-    -s | --sample) sample=1; shift; continue;;
     -q | --skip-sync) skip_sync=1; shift; continue ;;
+    -s | --sample)
+      sample=1
+      if [[ ! "$2" =~ ^[1-9][0-9]*$ ]]; then
+        shift; continue
+      fi
+      sample_duration=$(parse_option "$2" "$sample_duration" "$cmd" "$1" 's' '<seconds>' '[1-9][0-9]*')
+      ;;
     -x | --formats)                 formats=$(parse_option "$2" "$formats" "$cmd" "$1" 'x' "${allowed_formats//./}" '' 1) ;;
     -t | --input-type)           input_type=$(parse_option "$2" "$input_type" "$cmd" "$1" 't' 'shows, movies') ;;
     -o | --output)                   output=$(parse_file "$2" "$output" "$cmd" "$1" 'o' '' 0) ;;
@@ -1548,6 +1555,7 @@ parse_args() {
 
   [[ -n "$out_dir" ]] && OUT_DIR="$out_dir"
   [[ -n "$tmp_dir" ]] && TMP_DIR="$tmp_dir"
+  [[ -n "$sample_duration" ]] && EXTRACT_SHORT_SEC="$sample_duration"
   [[ -n "$rpu_levels" ]] && RPU_LEVELS=$(deduplicate_list "$rpu_levels")
   [[ -n "$plot" ]] && INFO_L1_PLOT="$plot"
   [[ -n "$info" ]] && INFO_INTERMEDIATE="$info"

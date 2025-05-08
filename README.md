@@ -134,7 +134,7 @@ Options:
   -i, --input <INPUT>        Input file/dir path [can be used multiple times]
   -x, --formats <F1,...,FN>  Filter files by format in dir inputs
   -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -s, --sample               Use a 23s sample instead of the full input file
+  -s, --sample               Process only the first N seconds of input
   -p, --plot <0|1>           Controls L1 plotting in info command [default: 1]
 ```
 
@@ -150,7 +150,7 @@ Options:
   -x, --formats <F1,...,FN>  Filter files by format in dir inputs
   -t, --input-type <TYPE>    Filter files by type in dir inputs
   -o, --output <OUTPUT>      Output file path [default: generated]
-  -s, --sample               Use a 23s sample instead of the full input file
+  -s, --sample               Process only the first N seconds of input
 ```
 
 ### `cuts` command
@@ -165,7 +165,7 @@ Options:
   -x, --formats <F1,...,FN>  Filter files by format in dir inputs
   -t, --input-type <TYPE>    Filter files by type in dir inputs
   -o, --output <OUTPUT>      Output file path [default: generated]
-  -s, --sample               Use a 23s sample instead of the full input file
+  -s, --sample               Process only the first N seconds of input
 ```
 
 ### `extract` command
