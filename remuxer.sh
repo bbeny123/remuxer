@@ -1176,9 +1176,12 @@ subs() {
     tracks+=("$(subs_mapping "$output" "$suffix" "$spacer" "$id" "${tracks[*]}")")
   done < <(mkvmerge -J "$input" | jq -r ".tracks[] | select(.codec == \"SubRip/SRT\") $select| \"$properties\"")
 
-  [[ ${#tracks[@]} -eq 0 ]] && log_kill "No subtitles found in '$(basename "$input")' (--lang-codes/-c: ${SUBS_LANG_CODES:-'all'})" 2 || log ""
-
-  mkvextract "$input" tracks "${tracks[@]}"
+  if [[ ${#tracks[@]} -gt 0 ]]; then
+    log ""
+    mkvextract "$input" tracks "${tracks[@]}"
+  else
+    log "No subtitles found in '$(basename "$input")' (--lang-codes/-c: ${SUBS_LANG_CODES:-'all'}), skipping..."
+  fi
 }
 
 help_dir() {
