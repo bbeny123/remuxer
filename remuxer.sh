@@ -791,6 +791,7 @@ inject_rpu() {
 
     if [ "$INFO_INTERMEDIATE" = 1 ]; then
       info "$rpu_base" >&2
+      info "$rpu_synced" >&2
       info "$output" >&2
     fi
   elif [ "$exit_if_exists" = 1 ]; then
