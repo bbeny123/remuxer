@@ -135,7 +135,7 @@ Options:
   -x, --formats <F1,...,FN>  Filter files by format in dir inputs
   -t, --input-type <TYPE>    Filter files by type in dir inputs
   -s, --sample               Process only the first N seconds of input
-  -p, --plot <0|1>           Controls L1 plotting in info command [default: 1]
+  -p, --plot <0|1>           Controls L1 plotting in info command
 ```
 
 ### `plot` command

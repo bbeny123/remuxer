@@ -35,6 +35,7 @@ SUBS_COPY_MODE='1'     # 0 - none,           1 - all,                 <lng> - ba
 SUBS_LANG_CODES=''     # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
 EXTRACT_SHORT_SEC='23'
 FFMPEG_STRICT=1
+OPTIONS_PLOT_SET=0
 
 declare -A commands=(
   [info]="       Show Dolby Vision information       | xtsp      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
@@ -564,7 +565,7 @@ info() {
   video_info "$input"
   rpu_info "$rpu" "$short_sample" "$quick"
 
-  [ "$INFO_L1_PLOT" = 1 ] && plot_l1 "$input" "$short_sample" 1
+  [ "$INFO_L1_PLOT" = 1 ] && [[ "$short_sample" != 1 || "$OPTIONS_PLOT_SET" = 1 ]] && plot_l1 "$input" "$short_sample" 1
 
   local input_info="RPU Input: $(basename "$rpu")"
   [ "$short_sample" = 1 ] && input_info+=" (sample duration: ${EXTRACT_SHORT_SEC}s)"
@@ -1217,11 +1218,12 @@ help1() {
 }
 
 help() {
-  local cmd="$1" b t q bin clean; help_left=21
+  local cmd="$1" p s b t q bin clean; help_left=21
   local -r description=${cmd_description[$cmd]:-$(cmd_info "$cmd")} formats=$(cmd_info "$cmd" 3)
   [[ "$cmd_options" == *b* ]] && b=1
   [[ "$cmd_options" == *t* ]] && t=1
   [[ "$cmd_options" == *q* ]] && q=1
+  [[ "$cmd_options" == *s* && "$INFO_L1_PLOT" != 0 ]] && s=1 || p=1
   [[ "$formats" == *bin* ]] && bin=1
   local multiple_inputs="${t:+"[ignored when multiple inputs]"}"
 
@@ -1263,7 +1265,8 @@ help() {
   help1 "-l, --rpu-levels <L1,...,LN>  RPU levels to inject [default: $B$RPU_LEVELS$N]
                                        [allowed values: ${B}1-6, 8-11, 254, 255$N]"
   help1 "-n, --info <0|1>              Controls intermediate info commands [default: $B$INFO_INTERMEDIATE$N]"
-  help1 "-p, --plot <0|1>              Controls L1 plotting in info command [default: $B$INFO_L1_PLOT$N]"
+  help1 "-p, --plot <0|1>              Controls L1 plotting in info command${p:+" [default: $B$INFO_L1_PLOT$N]"}
+                                       ${s:+"[default: $B$INFO_L1_PLOT$N, or ${B}0$N if $B--sample$N is used]"}"
   help1 "-c, --lang-codes <C1,...,CN>  ISO 639-2 lang codes of subtitle tracks to extract
                                        [default: $B${SUBS_LANG_CODES:-all}$N; example value: 'eng,pol']"
   clean="-m, --clean-filenames <0|1>   Controls output filename cleanup [default: $B$CLEAN_FILENAMES$N]
@@ -1561,7 +1564,7 @@ parse_args() {
   [[ -n "$tmp_dir" ]] && TMP_DIR="$tmp_dir"
   [[ -n "$sample_duration" ]] && EXTRACT_SHORT_SEC="$sample_duration"
   [[ -n "$rpu_levels" ]] && RPU_LEVELS=$(deduplicate_list "$rpu_levels")
-  [[ -n "$plot" ]] && INFO_L1_PLOT="$plot"
+  [[ -n "$plot" ]] && INFO_L1_PLOT="$plot" && OPTIONS_PLOT_SET=1
   [[ -n "$info" ]] && INFO_INTERMEDIATE="$info"
   [[ -n "$find_subs" ]] && SUBS_AUTODETECTION="$find_subs"
   [[ -n "$copy_subs" ]] && SUBS_COPY_MODE="$copy_subs"
