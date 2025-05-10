@@ -403,10 +403,16 @@ to_rpu_cuts() {
 }
 
 rpu_cuts_line() {
-  local -r input="$1" line="$2" short_sample="$3"
+  local input="$1" line="$2" short_sample="$3" lines
   local -r rpu_cuts=$(to_rpu_cuts "$input" "$short_sample" 1)
 
-  [[ -n "$line" ]] && sed -n "${line}p" "$rpu_cuts" || cat "$rpu_cuts"
+  ((line < 0)) && lines=$(tail -n "${line#-}" "$rpu_cuts") || lines=$(head -n "$line" "$rpu_cuts")
+
+  (( $(echo "$lines" | wc -l) < ${line#-} )) && return
+
+  ((line < 0)) && line=$(echo "$lines" | head -n 1) || line=$(echo "$lines" | tail -n 1)
+
+  [[ "$line" =~ ^[0-9]+$ ]] && echo "$line"
 }
 
 rpu_frames() {
@@ -508,6 +514,18 @@ l5_offset() {
   fi
 }
 
+cuts_consecutive() {
+  local -r input="$1" cut="$2" line="$3" short_sample="$4" log_cut="$5"
+  local -r cut2=$(rpu_cuts_line "$input" "$line" "$short_sample")
+
+  if [[ -n "$cut2" ]]; then
+    local difference="$((cut2 - cut))"
+    [ "${difference#-}" = 1 ] && red 'YES' || echo 'NO (good)'
+  else
+    yellow "UNKNOWN${log_cut:+" ($log_cut scene cut missing)"}"
+  fi
+}
+
 rpu_info() {
   local input="$1" short_sample="$2" quick="$3" rpu_json
 
@@ -543,19 +561,21 @@ rpu_info() {
   info[l5_right]=$(l5_offset "$input" "$short_sample" 'right')
 
   local -r cut1=$(rpu_cuts_line "$input" 1 "$short_sample")
-
-  if [[ "$cut1" =~ ^[0-9]+$ ]]; then
-    [ "$cut1" = '0' ] && info[cuts_first]='YES (good)' || info[cuts_first]='NO'
-
-    local -r cut2=$(rpu_cuts_line "$input" 2 "$short_sample")
-    if [[ "$cut2" =~ ^[0-9]+$ ]]; then
-      [ $((cut2 - cut1)) -ne 1 ] && info[cuts_cons]='NO (good)' || info[cuts_cons]='YES'
-    else
-      info[cuts_cons]='UNKNOWN (2nd scene cut missing)'
-    fi
+  if [[ -n "$cut1" ]]; then
+    [ "$cut1" = '0' ] && info[cuts_first]='YES (good)' || info[cuts_first]=$(red 'NO')
+    info[cuts_cons]=$(cuts_consecutive "$input" "$cut1" 2 "$short_sample" '2nd')
   else
-    info[cuts_first]='UNKNOWN (1st scene cut missing)'
-    info[cuts_cons]='UNKNOWN'
+    info[cuts_first]=$(yellow 'UNKNOWN (1st scene cut missing)')
+    info[cuts_cons]=$(yellow 'UNKNOWN')
+  fi
+
+  [ "$short_sample" = 1 ] && return
+
+  local -r cut_last=$(rpu_cuts_line "$input" -1 "$short_sample")
+  if [[ -n "$cut_last" ]]; then
+    info[cuts_last]=$(cuts_consecutive "$input" "$cut_last" -2 "$short_sample")
+  else
+    info[cuts_last]=$(yellow 'UNKNOWN')
   fi
 }
 
@@ -591,6 +611,7 @@ info() {
   echo "  L5 offset: TOP=${info[l5_top]} BOTTOM=${info[l5_bottom]}, LEFT=${info[l5_left]}, RIGHT=${info[l5_right]}"
   echo "  1st Frame is a Scene Cut: ${info[cuts_first]}"
   echo "  Consecutive Scene Cuts: ${info[cuts_cons]}"
+  [[ -n "${info[cuts_last]}" ]] && echo "  Consecutive Last Scene Cuts: ${info[cuts_last]}"
 
   if check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc'; then
     local base_layer
