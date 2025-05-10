@@ -3,6 +3,7 @@
 shopt -s expand_aliases
 
 readonly N=$(tput sgr0) B=$(tput bold) U=$(tput smul)
+readonly RED=$(tput setaf 1) YELLOW=$(tput setaf 3)
 readonly BU="$B$U"
 readonly REMUXER="$B$(basename "$0")$N" VERSION="1.0.3"
 readonly START_TIME=$(date +%s%1N)
@@ -55,6 +56,14 @@ declare -A cmd_description=(
 )
 declare -i help_short=0 help_left=15
 cmd_options=""
+
+red() {
+  echo "$RED$1$N"
+}
+
+yellow() {
+  echo "$YELLOW$1$N"
+}
 
 windows() {
   case "$OSTYPE" in
@@ -489,10 +498,14 @@ l5_offset() {
   local -r input="$1" short_sample="$2" edge="$3"
   local -r rpu_l5=$(to_rpu_l5 "$input" "$short_sample")
 
-  local -r edge_offsets=$(grep "$edge" "$rpu_l5" | sort -u | grep -oE "[0-9]+" || echo 'N/A')
+  local -r edge_offsets=$(grep "$edge" "$rpu_l5" | sort -u | grep -oE "[0-9]+" || yellow 'N/A')
   local -r offset_min=$(echo "$edge_offsets" | head -n1) offset_max=$(echo "$edge_offsets" | tail -n1)
 
-  [ "$offset_min" = "$offset_max" ] && echo "$offset_min" || echo "($offset_min - $offset_max)"
+  if [ "$offset_min" = "$offset_max" ]; then
+    [[ "$offset_min" = '0' && "$edge" != 'left' && "$edge" != 'right' ]] && yellow 0 || echo "$offset_min"
+  else
+    echo "($offset_min - $offset_max)"
+  fi
 }
 
 rpu_info() {
