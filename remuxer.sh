@@ -156,7 +156,7 @@ windows_safe_path() {
 }
 
 generate_file() {
-  local dir="$1" input_file="$2" ext="$3" suffix="$4" output="$5" clean_name="$6" windows_safe_path="$7"
+  local dir="$1" input_file="$2" ext="$3" prefix="$4" output="$5" clean_name="$6" windows_safe_path="$7"
 
   if [[ -n "$output" ]]; then
     mkdir -p "$(dirname "$output")"
@@ -168,7 +168,7 @@ generate_file() {
 
   if [ "$clean_name" = 1 ]; then
     input_file=$(clean_filename "$input_file")
-    suffix=""
+    prefix=""
   else
     input_file=$(filename "$input_file")
   fi
@@ -176,7 +176,7 @@ generate_file() {
   [ ! -d "$dir" ] && mkdir -p "$dir"
   [ "$windows_safe_path" = 1 ] && windows && dir=$(windows_safe_path "$dir")
 
-  echo "${dir%/}/$input_file${suffix:+_${suffix#_}}.${ext#.}"
+  echo "${dir%/}/${prefix:+${prefix%_}_}$input_file.${ext#.}"
 }
 
 tmp_file() {
@@ -193,14 +193,14 @@ out_hybrid() {
 }
 
 rpu_export_file() {
-  local dir="$1" input="$2" short_sample="$3" ext="$4" suffix="$5" output="$6" out_dir="$7"
+  local dir="$1" input="$2" short_sample="$3" ext="$4" prefix="$5" output="$6" out_dir="$7"
 
   if [ "$short_sample" = 1 ]; then
-    suffix+="-${EXTRACT_SHORT_SEC}"
+    prefix+="-${EXTRACT_SHORT_SEC}"
     [ "$out_dir" != 1 ] && dir="$TMP_DIR"
   fi
 
-  generate_file "$dir" "$input" "$ext" "$suffix" "$output"
+  generate_file "$dir" "$input" "$ext" "$prefix" "$output"
 }
 
 rpu_cuts_file() {
@@ -330,12 +330,12 @@ to_cm4_rpu() {
 }
 
 to_rpu_json() {
-  local input="$1" short_sample="$2" quick="$3" cuts_output="$4" l5_output="$5" output="$6" suffix=""
-  [ "$quick" = 1 ] && suffix+="FRAME_24" || suffix+="ALL"
-  [ "$short_sample" = 1 ] && suffix+="-${EXTRACT_SHORT_SEC}"
+  local input="$1" short_sample="$2" quick="$3" cuts_output="$4" l5_output="$5" output="$6" prefix=""
+  [ "$quick" = 1 ] && prefix+="FRAME_24" || prefix+="ALL"
+  [ "$short_sample" = 1 ] && prefix+="-${EXTRACT_SHORT_SEC}"
 
   input=$(to_rpu "$input" "$short_sample" 1)
-  output=$(tmp_file "$input" 'json' "$suffix" "$output")
+  output=$(tmp_file "$input" 'json' "$prefix" "$output")
 
   if [[ ! -f "$output" ]]; then
     cuts_output=$(rpu_cuts_file "$input" "$short_sample" 0 "$cuts_output")
@@ -419,9 +419,9 @@ plot_l1() {
   local -r rpu=$(to_rpu "$input" "$short_sample" "$intermediate")
   local -r input_name=$(basename "$input")
 
-  local output_suffix='L1-plot'
-  [ "$short_sample" = 1 ] && output_suffix+="-${EXTRACT_SHORT_SEC}s"
-  local -r plot=$(generate_file "${PLOTS_DIR:-"$OUT_DIR"}" "$rpu" 'png' "$output_suffix" "$output")
+  local output_prefix='L1-plot'
+  [ "$short_sample" = 1 ] && output_prefix+="-${EXTRACT_SHORT_SEC}s"
+  local -r plot=$(generate_file "${PLOTS_DIR:-"$OUT_DIR"}" "$rpu" 'png' "$output_prefix" "$output")
 
   log "Plotting L1 metadata for: '$input_name' ..." 1
 
