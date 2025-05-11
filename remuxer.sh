@@ -1249,7 +1249,7 @@ help0() {
   local help="$1" empty_line="$2" option=${1:1:1} optionals="bxtoesqflnpcmr" line left
   local help="$1" empty_line="$2" option=${1:1:1} line left
 
-  [[ -n "${option// }" && "ihv" != *"$option"* && -n "$cmd_options" && "$cmd_options" != *"$option"* ]] && return
+  [[ -n "${option// }" && "ihvN" != *"$option"* && -n "$cmd_options" && "$cmd_options" != *"$option"* ]] && return
 
   [[ "$empty_line" = 1 && "$help_short" != 1 ]] && echo ""
   while IFS= read -r line; do
