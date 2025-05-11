@@ -175,18 +175,20 @@ Options:
 
 ### `extract` command
 
-**Description:** Extract *Dolby Vision RPU(s)*
+**Description:** Extract *Dolby Vision RPU(s)* or `.hevc` *base layer(s)*
 
 ```bash
 Usage: remuxer extract [OPTIONS] [INPUT...]
 
 Options:
-  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
-  -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -o, --output <OUTPUT>      Output file path [default: generated]
-  -n, --info <0|1>           Controls intermediate info commands [default: 1]
-  -p, --plot <0|1>           Controls L1 plotting in info command [default: 1]
+  -i, --input <INPUT>           Input file/dir path [can be used multiple times]
+  -x, --formats <F1,...,FN>     Filter files by format in dir inputs
+  -t, --input-type <TYPE>       Filter files by type in dir inputs
+  -o, --output <OUTPUT>         Output file path [default: generated]
+  -e, --output-format <FORMAT>  Output format [default: bin]
+  -s, --sample [<SECONDS>]      Process only the first N seconds of input
+  -n, --info <0|1>              Controls intermediate info commands [default: 1]
+  -p, --plot <0|1>              Controls L1 plotting in info command [default: 1]
 ```
 
 ### `frame-shift` command

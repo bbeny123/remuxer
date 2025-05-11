@@ -39,15 +39,15 @@ FFMPEG_STRICT=1
 OPTIONS_PLOT_SET=0
 
 declare -A commands=(
-  [info]="       Show Dolby Vision information       | xtsp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [plot]="       Plot L1 dynamic brightness metadata | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [cuts]="       Extract scene-cut frame list(s)     | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [extract]="    Extract Dolby Vision RPU(s)         | xtonp      | .mkv, .mp4, .m2ts, .ts, .hevc"
-  [frame-shift]="Calculate frame shift               | b          | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [sync]="       Synchronize Dolby Vision RPU files  | bofnp      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [inject]="     Sync & Inject Dolby Vision RPU      | boeqflwnmp | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [subs]="       Extract .srt subtitles              | tocm       | .mkv"
-  [remux]="      Remux video file(s)                 | xtoemr     | .mkv, .mp4, .m2ts, .ts"
+  [info]="       Show Dolby Vision information            | xtsp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="       Plot L1 dynamic brightness metadata      | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [cuts]="       Extract scene-cut frame list(s)          | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [extract]="    Extract DV RPU(s) or .hevc base layer(s) | xtosenp    | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [frame-shift]="Calculate frame shift                    | b          | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [sync]="       Synchronize Dolby Vision RPU files       | bofnp      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [inject]="     Sync & Inject Dolby Vision RPU           | boeqflwnmp | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [subs]="       Extract .srt subtitles                   | tocm       | .mkv"
+  [remux]="      Remux video file(s)                      | xtoemr     | .mkv, .mp4, .m2ts, .ts"
 )
 declare -A cmd_description=(
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
@@ -85,6 +85,8 @@ cmd_info() {
 }
 
 cmd_output_formats() {
+  [ "$1" = 'extract' ] && echo "hevc, bin" && return
+
   local allowed_formats=$(cmd_info "$1" 3)
   allowed_formats=" ${allowed_formats//./},"
 
@@ -207,7 +209,7 @@ rpu_export_file() {
   local dir="$1" input="$2" short_sample="$3" ext="$4" prefix="$5" output="$6" out_dir="$7"
 
   if [ "$short_sample" = 1 ]; then
-    prefix+="-${EXTRACT_SHORT_SEC}"
+    prefix+="-${EXTRACT_SHORT_SEC}s"
     [ "$out_dir" != 1 ] && dir="$TMP_DIR"
   fi
 
@@ -254,61 +256,70 @@ p7_input() {
 }
 
 to_hevc() {
-  local input="$1" output="$2"
+  local input="$1" short_sample="$2" output="$3" out_dir="$4" prefix='HEVC' type='Base layer' ffmpeg_cmd=()
 
   file_exists "$input" 'input' 1
+  [ "$short_sample" != 1 ] && check_extension "$input" ".hevc" && echo "$input" && return
+  check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc' 1
 
-  if check_extension "$input" ".hevc"; then
-    echo "$input"
-    return
+  [ "$FFMPEG_STRICT" = 1 ] && ffmpeg_cmd+=(-strict -2)
+
+  if [ "$short_sample" = 1 ]; then
+    prefix+="-${EXTRACT_SHORT_SEC}s"
+    ffmpeg_cmd+=(-t "$EXTRACT_SHORT_SEC")
+    type+=" sample"
   fi
 
-  check_extension "$input" '.mkv .mp4 .m2ts .ts' 1
-  output=$(tmp_file "$input" 'hevc' 'HEVC' "$output")
+  [ "$out_dir" = 1 ] && out_dir="$OUT_DIR" || out_dir="$TMP_DIR"
+  output=$(generate_file "$out_dir" "$input" 'hevc' "$prefix" "$output")
+
   local -r input_name=$(basename "$input")
+  log "Extracting ${type,,} for: '$input_name' ..." 1
 
-  log "Extracting base layer for: '$input_name' ..." 1
-  [[ ! -f "$output" ]] && ffmpeg -i "$input" -map 0:0 -c copy -strict -2 -f hevc "$output" >&2
-
-  log "Base layer for: '$input_name' extracted - output file: '$output'" 1
+  if [[ ! -f "$output" ]]; then
+    ffmpeg -i "$input" -map 0:0 -c copy "${ffmpeg_cmd[@]}" -f hevc "$output" >&2
+    log "$type for: '$input_name' extracted - output file: '$output'" 1
+  else
+    log "The .hevc file: '$output' already exists, skipping..."
+  fi
 
   echo "$output"
 }
 
 to_rpu() {
-  local input="$1" short_sample="$2" quiet="${3:-$2}" output="$4" info="$5" short_cmd
+  local input="$1" short_sample="$2" quiet="${3:-$2}" output="$4" out_dir="$5" info="$6" type='RPU' ffmpeg_cmd=()
 
   file_exists "$input" 'input' 1
-
-  if check_extension "$input" ".bin"; then
-    echo "$input"
-    return
-  fi
-
+  check_extension "$input" ".bin" && echo "$input" && return
   check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc' 1
   local -r input_name=$(basename "$input")
 
+  [ "$FFMPEG_STRICT" = 1 ] && ffmpeg_cmd+=(-strict -2)
+
   if [ "$short_sample" = 1 ]; then
-    output=$(tmp_file "$input" 'bin' 'RPU' "$output")
-    short_cmd=" -t $EXTRACT_SHORT_SEC"
+    [ "$out_dir" = 1 ] && out_dir="$OUT_DIR" || out_dir="$TMP_DIR"
+    output=$(generate_file "$out_dir" "$input" 'bin' "RPU-${EXTRACT_SHORT_SEC}s" "$output")
+    ffmpeg_cmd+=(-t "$EXTRACT_SHORT_SEC")
+    type+=" sample"
   else
+    short_sample=''
     output=$(out_file "$input" 'bin' 'RPU' "$output")
   fi
 
-  [ "$quiet" != 1 ] && log "Extracting RPU for: '$input_name' ..." 1
+  [ "$quiet" != 1 ] && log "Extracting $type for: '$input_name' ..." 1
 
   if [[ ! -f "$output" ]]; then
-    [ "$quiet" = 1 ] && log "Extracting RPU for: '$input_name' ..." 1
+    [ "$quiet" = 1 ] && log "Extracting $type for: '$input_name' ..." 1
 
     if [[ -z "$short_cmd" ]] && check_extension "$input" ".hevc"; then
       dovi_tool extract-rpu -o "$output" "$input" >/dev/null
     else
-      if ! ffmpeg -i "$input" -map 0:0 -c copy -strict -2$short_cmd -f hevc - | dovi_tool extract-rpu -o "$output" - >/dev/null; then
-        log_kill "Error while extracting RPU for: '$input_name'"
+      if ! ffmpeg -i "$input" -map 0:0 -c copy "${ffmpeg_cmd[@]}" -f hevc - | dovi_tool extract-rpu -o "$output" - >/dev/null; then
+        log_kill "Error while extracting $type for: '$input_name'"
       fi
     fi
 
-    log "RPU for: '$input_name' extracted - output file: '$output'"
+    log "$type for: '$input_name' extracted - output file: '$output'"
   elif [ "$quiet" != 1 ]; then
     log "The RPU file: '$output' already exists, skipping..."
   fi
@@ -340,10 +351,21 @@ to_cm4_rpu() {
   fi
 }
 
+extract() {
+  local input="$1" short_sample="$2" output_format="$3" output="$4"
+  [[ -z "$output_format" && "$output" == *.* ]] && output_format="${output##*.}"
+
+  if [[ "${output_format,,}" == *hevc* ]]; then
+    to_hevc "$input" "$short_sample" "$output" 1 >/dev/null
+  else
+    to_rpu "$input" "$short_sample" 0 "$output" 1 "$INFO_INTERMEDIATE" >/dev/null
+  fi
+}
+
 to_rpu_json() {
   local input="$1" short_sample="$2" quick="$3" cuts_output="$4" l5_output="$5" output="$6" prefix=""
   [ "$quick" = 1 ] && prefix+="FRAME_24" || prefix+="ALL"
-  [ "$short_sample" = 1 ] && prefix+="-${EXTRACT_SHORT_SEC}"
+  [ "$short_sample" = 1 ] && prefix+="-${EXTRACT_SHORT_SEC}s"
 
   input=$(to_rpu "$input" "$short_sample" 1)
   output=$(tmp_file "$input" 'json' "$prefix" "$output")
@@ -1275,7 +1297,8 @@ help() {
   [[ "$cmd_options" == *q* ]] && q=1
   [[ "$cmd_options" == *s* && "$INFO_L1_PLOT" != 0 ]] && s=1 || p=1
   [[ "$formats" == *bin* ]] && bin=1
-  local multiple_inputs="${t:+"[ignored when multiple inputs]"}"
+  local multiple_inputs="${t:+"[ignored when multiple inputs]"}" default_output_format='auto-detected'
+  [ "$cmd" = 'extract' ] && default_output_format='bin'
 
   case "$cmd_options" in
   *[elc]*) help_left+=9 ;;
@@ -1304,7 +1327,7 @@ help() {
                                        $B- movies:$N non-show files"
   help1 "-o, --output <OUTPUT>         Output file path [default: ${B}generated$N]
                                        $multiple_inputs"
-  help1 "-e, --output-format <FORMAT>  Output format [default: ${B}auto-detected$N]
+  help1 "-e, --output-format <FORMAT>  Output format [default: $B$default_output_format$N]
                                        [allowed values: $B$(cmd_output_formats "$cmd")$N]"
   help1 "-s, --sample [<SECONDS>]      Process only the first N seconds of input
                                        [default sample duration: ${EXTRACT_SHORT_SEC}s]
@@ -1325,14 +1348,14 @@ help() {
                                        [ignored if $B--output$N is set]
                                        [e.g., 'The.Show.S01E01.HDR' → 'The Show S01E01']
                                        [e.g., 'A.Movie.2025.UHD.2160p.DV' → 'A Movie']"
-  [[ "$cmd_options" != *e* ]] && help1 "$clean"
+  [[ "$cmd" != inject && "$cmd" != remux ]] && help1 "$clean"
   help1 "    --out-dir <DIR>           Output files dir path
                                        [default: '$B$(help_dir "$OUT_DIR")$N']"
   help1 "    --tmp-dir <DIR>           Temp files dir path [will be ${B}removed if created$N]
                                        [default: '$B$(help_dir "$TMP_DIR")$N']"
   help1 "-h, --help                    Show help (use '$B--help$N' for a detailed version)"
 
-  [[ "$cmd_options" != *e* ]] && return
+  [[ "$cmd" != inject && "$cmd" != remux ]] && return
   echo1 "${BU}Options for .mkv / .mp4 output:$N"
   help0 "    --subs <FILE>             $B.srt$N subtitle file path to include
                                        $multiple_inputs"
@@ -1635,7 +1658,7 @@ parse_args() {
     info) info "$input" "$sample" 0 0 ;;
     plot) plot_l1 "$input" "$sample" 0 "$output" ;;
     cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;
-    extract) to_rpu "$input" 0 0 "$output" "$INFO_INTERMEDIATE" >/dev/null ;;
+    extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
     inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$output_format" "$output" "$subs" "$title" ;;

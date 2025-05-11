@@ -10,7 +10,7 @@ _remuxer_complete_path() {
 }
 
 _remuxer_complete() {
-  local cur prev cmd options values f formats="mkv mp4 hevc bin"
+  local cur prev cmd options values formats="mkv mp4 m2ts ts hevc bin" output_formats="mkv mp4 hevc bin"
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD - 1]}"
@@ -22,9 +22,9 @@ _remuxer_complete() {
   fi
 
   case "$cmd" in
-  extract) formats="mkv mp4 hevc" ;;
-  remux) formats="mkv mp4" ;;
-  subs) formats="mkv" ;;
+  extract) formats="mkv mp4 m2ts ts hevc"; output_formats="hevc bin" ;;
+  remux) formats="mkv mp4 m2ts ts"; output_formats="mkv mp4" ;;
+  subs) formats="mkv"; output_formats="srt" ;;
   esac
 
   case "$prev" in
@@ -32,7 +32,8 @@ _remuxer_complete() {
     _remuxer_complete_path "$cur" && return ;;
   --out-dir | --tmp-dir)
     _remuxer_complete_path "$cur" '-d' && return ;;
-  -[ex] | --output-format | --formats) values="$formats" ;;
+  -x | --formats) values="$formats" ;;
+  -e | --output-format) values="$output_formats" ;;
   -t | --input-type) values="shows movies" ;;
   -l | --rpu-levels) values="1 2 3 4 5 6 8 9 10 11 254 255" ;;
   -[npm] | --info | --plot | --clean-filenames | --find-subs | --auto-title | --auto-tracks) values="0 1" ;;
@@ -55,7 +56,7 @@ _remuxer_complete() {
   info) options="--formats --input-type --sample --plot" ;;
   plot) options="--formats --input-type --output --sample" ;;
   cuts) options="--formats --input-type --output --sample" ;;
-  extract) options="--formats --input-type --output --info --plot" ;;
+  extract) options="--formats --input-type --output --output-format --sample --info --plot" ;;
   frame-shift) options="--base-input" ;;
   sync) options="--base-input --output --frame-shift --info --plot" ;;
   inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames" ;;
