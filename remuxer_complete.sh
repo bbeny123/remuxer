@@ -58,7 +58,7 @@ _remuxer_complete() {
   extract) options="--formats --input-type --output --info --plot" ;;
   frame-shift) options="--base-input" ;;
   sync) options="--base-input --output --frame-shift --info --plot" ;;
-  inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames" ;;
+  inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames" ;;
   subs) options="--input-type --output --lang-codes --clean-filenames" ;;
   remux) options="--formats --input-type --output --output-format --subs --find-subs --copy-subs --copy-audio --hevc --title --auto-title --auto-tracks --clean-filenames" ;;
   esac

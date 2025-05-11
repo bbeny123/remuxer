@@ -39,15 +39,15 @@ FFMPEG_STRICT=1
 OPTIONS_PLOT_SET=0
 
 declare -A commands=(
-  [info]="       Show Dolby Vision information       | xtsp      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [plot]="       Plot L1 dynamic brightness metadata | xtos      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [cuts]="       Extract scene-cut frame list(s)     | xtos      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [extract]="    Extract Dolby Vision RPU(s)         | xtonp     | .mkv, .mp4, .m2ts, .ts, .hevc"
-  [frame-shift]="Calculate frame shift               | b         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [sync]="       Synchronize Dolby Vision RPU files  | bofnp     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [inject]="     Sync & Inject Dolby Vision RPU      | boeqflnmp | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [subs]="       Extract .srt subtitles              | tocm      | .mkv"
-  [remux]="      Remux video file(s)                 | xtoemr    | .mkv, .mp4, .m2ts, .ts"
+  [info]="       Show Dolby Vision information       | xtsp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="       Plot L1 dynamic brightness metadata | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [cuts]="       Extract scene-cut frame list(s)     | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [extract]="    Extract Dolby Vision RPU(s)         | xtonp      | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [frame-shift]="Calculate frame shift               | b          | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [sync]="       Synchronize Dolby Vision RPU files  | bofnp      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [inject]="     Sync & Inject Dolby Vision RPU      | boeqflwnmp | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [subs]="       Extract .srt subtitles              | tocm       | .mkv"
+  [remux]="      Remux video file(s)                 | xtoemr     | .mkv, .mp4, .m2ts, .ts"
 )
 declare -A cmd_description=(
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
@@ -198,8 +198,9 @@ out_file() {
 }
 
 out_hybrid() {
-  local -r input_name=$(filename "$1") input_base="$2" ext="$3" output="$4"
-  out_file "$input_base" "$ext" "HYBRID-${RPU_LEVELS//[^0-9]/}-$input_name" "$output"
+  local input_name=$(filename "$1") input_base="$2" ext="$3" output="$4" raw_rpu="$5" prefix
+  [ "$raw_rpu" != 1 ] && prefix="-${RPU_LEVELS//[^0-9]/}"
+  out_file "$input_base" "$ext" "HYBRID$prefix-$input_name" "$output"
 }
 
 rpu_export_file() {
@@ -839,22 +840,31 @@ inject_rpu() {
 }
 
 inject_hevc() {
-  local input="$1" input_base="$2" skip_sync="$3" frame_shift="$4" output="$5" exit_if_exists="$6"
+  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" output="$6" exit_if_exists="$7" rpu_type='Raw' rpu_injected
 
-  output=$(out_hybrid "$input" "$input_base" 'hevc' "$output")
+  output=$(out_hybrid "$input" "$input_base" 'hevc' "$output" "$raw_rpu")
   log "Creating hybrid base layer: '$(basename "$output")'..." 1
 
   if [[ ! -f "$output" ]]; then
-    local -r rpu_injected=$(inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift")
+    if [ "$raw_rpu" != 1 ]; then
+      rpu_type='Hybrid'
+      rpu_injected=$(inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift")
+    elif [ "$skip_sync" != 1 ]; then
+      rpu_injected=$(sync_rpu "$input" "$input_base" "$frame_shift" 1)
+    else
+      log "Skipping raw RPU sync..." 1
+      rpu_injected=$(to_rpu "$input")
+    fi
+
     local -r hevc=$(to_hevc "$input_base") base_name=$(basename "$input_base")
 
-    log "Injecting hybrid RPU: '$(basename "$rpu_injected")' into base layer of '$base_name' ..." 1 && log ""
+    log "Injecting ${rpu_type,,} RPU: '$(basename "$rpu_injected")' into base layer of '$base_name' ..." 1 && log ""
 
     dovi_tool inject-rpu -r "$rpu_injected" -o "$output" "$hevc" >&2
 
     [[ ! "$input_base" -ef "$hevc" ]] && rm "$hevc" && log "Intermediate base layer: '$(basename "$hevc")' removed" 1
 
-    log "Hybrid RPU: '$(basename "$rpu_injected")' successfully injected into base layer of '$base_name' - output file: '$output'" 1
+    log "$rpu_type RPU: '$(basename "$rpu_injected")' successfully injected into base layer of '$base_name' - output file: '$output'" 1
   elif [ "$exit_if_exists" = 1 ]; then
     log_kill "The hybrid base layer: '$output' already exists" 2
   else
@@ -1144,24 +1154,26 @@ remux() {
 }
 
 inject() {
-  local input="$1" input_base="$2" skip_sync="$3" frame_shift="$4" output_format="$5" output="$6" subs="$7" title="$8"
+  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" output_format="$6" output="$7" subs="$8" title="$9" type
 
   check_extension "$input_base" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
   check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
 
   output_format=$(target_format "$input_base" "$output_format" "$output" '.mkv .mp4 .hevc .bin')
 
-  log "Injecting RPU levels: $RPU_LEVELS of '$(basename "$input")' into '$(basename "$input_base")' ..." 1
+  [ "$raw_rpu" = 1 ] && type='raw RPU' || type="RPU levels: $RPU_LEVELS"
+  log "Injecting $type of '$(basename "$input")' into '$(basename "$input_base")'..." 1
 
   if [[ "$output_format" == *bin* ]]; then
+    [ "$raw_rpu" = 1 ] && log_kill "'$B--raw-rpu/-w$N' cannot be used with .bin outputs" 2
     inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift" "$output" 1 >/dev/null
   elif [[ "$output_format" == *hevc* ]]; then
-    inject_hevc "$input" "$input_base" "$skip_sync" "$frame_shift" "$output" 1 >/dev/null
+    inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift" "$output" 1 >/dev/null
   else
     output=$(out_file "$input_base" "$output_format" "HYBRID" "$output" "$CLEAN_FILENAMES")
     [[ -f "$output" ]] && log "Hybrid output file: '$(basename "$output")' already exists, skipping..." && return
 
-    local hevc=$(inject_hevc "$input" "$input_base" "$skip_sync" "$frame_shift")
+    local hevc=$(inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift")
 
     log "Injecting hybrid base layer: '$(basename "$hevc")' into '$(basename "$input_base")'..." 1
     remux "$input_base" "$output_format" "$output" "$hevc" "$subs" "$title" 0
@@ -1235,8 +1247,9 @@ help_dir() {
 
 help0() {
   local help="$1" empty_line="$2" option=${1:1:1} optionals="bxtoesqflnpcmr" line left
+  local help="$1" empty_line="$2" option=${1:1:1} line left
 
-  [[ -n "$option" && -n "$cmd_options" && $optionals == *"$option"* && "$cmd_options" != *"$option"* ]] && return
+  [[ -n "${option// }" && "ihv" != *"$option"* && -n "$cmd_options" && "$cmd_options" != *"$option"* ]] && return
 
   [[ "$empty_line" = 1 && "$help_short" != 1 ]] && echo ""
   while IFS= read -r line; do
@@ -1297,7 +1310,9 @@ help() {
   help1 "-f, --frame-shift <SHIFT>     Frame shift value [default: ${B}auto-calculated$N]
                                        ${q:+"[ignored when $B--skip-sync$N]"}"
   help1 "-l, --rpu-levels <L1,...,LN>  RPU levels to inject [default: $B$RPU_LEVELS$N]
-                                       [allowed values: ${B}1-6, 8-11, 254, 255$N]"
+                                       [allowed values: ${B}1-6, 8-11, 254, 255$N]
+                                       [ignored when $B--raw-rpu$N]"
+  help1 "-w, --raw-rpu                 Inject input RPU instead of transferring levels"
   help1 "-n, --info <0|1>              Controls intermediate info commands [default: $B$INFO_INTERMEDIATE$N]"
   help1 "-p, --plot <0|1>              Controls L1 plotting in info command${p:+" [default: $B$INFO_L1_PLOT$N]"}
                                        ${s:+"[default: $B$INFO_L1_PLOT$N, or ${B}0$N if $B--sample$N is used]"}"
@@ -1530,7 +1545,7 @@ parse_args() {
   [[ $# -eq 0 ]] && show_help "$cmd" 1 && return
 
   local allowed_formats=$(cmd_info "$cmd" 3)
-  local -i batch=0 sample=0 skip_sync=0
+  local -i batch=0 sample=0 skip_sync=0 rpu_raw=0
 
   [[ "$cmd_options" == *t* ]] && batch=1
 
@@ -1542,6 +1557,7 @@ parse_args() {
     -h | --help) show_help "$cmd" "$1"; return ;;
     -v | --version) version; return ;;
     -q | --skip-sync) skip_sync=1; shift; continue ;;
+    -w | --raw-rpu) rpu_raw=1; shift; continue ;;
     -s | --sample)
       sample=1
       if [[ ! "$2" =~ ^[1-9][0-9]*$ ]]; then
@@ -1592,6 +1608,7 @@ parse_args() {
     [ "$skip_sync" = 1 ] && frame_shift=$(option_ignored "$frame_shift" '--frame-shift/-f' "has no effect when $B--skip-sync$N")
     [[ -n "$output" && "$clean_filenames" = 1 ]] && clean_filenames=$(option_ignored "$clean_filenames" '--clean-filenames/-m' "has no effect when $B--output$N is set")
     [[ -n "$title" ]] && title_auto=$(option_ignored "$title_auto" '--auto-title' "has no effect when $B--title$N is set")
+    [[ "$rpu_raw" = 1 ]] && rpu_levels=$(option_ignored "$rpu_levels" '--rpu-levels/-l' "has no effect when $B--rpu_raw$N is set")
   fi
 
   [[ -n "$out_dir" ]] && OUT_DIR="$out_dir"
@@ -1618,7 +1635,7 @@ parse_args() {
     extract) to_rpu "$input" 0 0 "$output" "$INFO_INTERMEDIATE" >/dev/null ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
-    inject) inject "$input" "$base_input" "$skip_sync" "$frame_shift" "$output_format" "$output" "$subs" "$title" ;;
+    inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$output_format" "$output" "$subs" "$title" ;;
     subs) subs "$input" "$output" ;;
     remux) remux "$input" "$output_format" "$output" "$hevc" "$subs" "$title" ;;
     *) log "Unknown command: $cmd" 2; show_help; exit 1 ;;

@@ -227,6 +227,7 @@ Options:
   -q, --skip-sync               Skip RPUs sync (assumes RPUs are already in sync)
   -f, --frame-shift <SHIFT>     Frame shift value [default: auto-calculated]
   -l, --rpu-levels <L1,...,LN>  RPU levels to inject [default: 3,8,9,11,254]
+  -w, --raw-rpu                 Inject input RPU instead of transferring levels
   -n, --info <0|1>              Controls intermediate info commands [default: 1]
   -p, --plot <0|1>              Controls L1 plotting in info command [default: 1]
 
