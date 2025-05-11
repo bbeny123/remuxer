@@ -408,7 +408,7 @@ rpu_cuts_line() {
 
   ((line < 0)) && lines=$(tail -n "${line#-}" "$rpu_cuts") || lines=$(head -n "$line" "$rpu_cuts")
 
-  (( $(echo "$lines" | wc -l) < ${line#-} )) && return
+  (($(echo "$lines" | wc -l) < ${line#-})) && return
 
   ((line < 0)) && line=$(echo "$lines" | head -n 1) || line=$(echo "$lines" | tail -n 1)
 
@@ -868,9 +868,9 @@ mp4_unremuxable() {
   local -r base_file="$1" hevc="$2" short_sample="$3" input_type="${4:-'--base-input/-b'}"
 
   [[ -z "$hevc" ]] && check_extension "$base_file" '.mp4' && return 0
-  [[ -n "$(lossless_audio_info "$base_file")" ]] && echo "'$input_type' contains lossless audio" && return 1
+  [[ -n "$(lossless_audio_info "$base_file")" ]] && echo "'$B$input_type$N' contains lossless audio" && return 1
   [[ -n "$hevc" ]] && p7_input "$hevc" "$short_sample" && echo "'--hevc/-r' contains Dolby Vision Profile 7 layer" && return 1
-  [[ -z "$hevc" ]] && p7_input "$base_file" "$short_sample" && echo "'$input_type' contains Dolby Vision Profile 7 layer" && return 1
+  [[ -z "$hevc" ]] && p7_input "$base_file" "$short_sample" && echo "'$B$input_type$N' contains Dolby Vision Profile 7 layer" && return 1
 
   return 0
 }
@@ -884,7 +884,7 @@ mp4_preferred() {
 auto_target_format() {
   local -r input="$1" hevc="$2" short_sample="$3" input_type="${4:-"--base-input/-b"}"
 
-  [[ "$input" != *.* ]] && log_kill "Cannot deduce target format ('$input_type' have no extension)" 2
+  [[ "$input" != *.* ]] && log_kill "Cannot deduce target format ('$B$input_type$N' have no extension)" 2
 
   local -r target_format="${input##*.}"
 
@@ -895,9 +895,9 @@ auto_target_format() {
 }
 
 target_format() {
-  local input="$1" target_format="$2" output="$3" valid_extensions="$4" short_sample="$5" hevc="$6" input_type="${7:-"--base-input/-b"}" type="'--output-format/-e'"
+  local input="$1" target_format="$2" output="$3" valid_extensions="$4" short_sample="$5" hevc="$6" input_type="${7:-"--base-input/-b"}" type="'$B--output-format/-e$N'"
 
-  [[ -z "$target_format" && "$output" == *.* ]] && target_format="${output##*.}" && type="'--output/-o' format"
+  [[ -z "$target_format" && "$output" == *.* ]] && target_format="${output##*.}" && type="'$B--output/-o$N' format"
 
   if [[ -z "$target_format" ]]; then
     auto_target_format "$input" "$hevc" "$short_sample" "$input_type"
@@ -905,7 +905,7 @@ target_format() {
   fi
 
   if [[ "$output" == *.* ]] && ! check_extension "$output" ".$target_format"; then
-    log_kill "Invalid $type: '$target_format' is incompatible with given '--output/-o': '$(basename "$output")'" 2
+    log_kill "Invalid $type: '$target_format' is incompatible with given '$B--output/-o$N': '$(basename "$output")'" 2
   fi
 
   if ! check_extension "$target_format" "$valid_extensions"; then
@@ -913,15 +913,15 @@ target_format() {
   fi
 
   if check_extension "$target_format" ".mkv .mp4"; then
-    if ! check_extension "$input" ".mkv .mp4"; then
-      log_kill "Invalid $type: '$target_format' requires .mkv or .mp4 '$input_type'" 2
+    if ! check_extension "$input" ".mkv .mp4 .m2ts .ts"; then
+      log_kill "Invalid $type: '$target_format' is incompatible with .${input##*.} '$B$input_type$N'" 2
     elif check_extension "$target_format" ".mp4"; then
       local -r unremuxable_reason=$(mp4_unremuxable "$input" "$hevc" "$short_sample" "$input_type")
       [[ -n "$unremuxable_reason" ]] && log_kill "Invalid $type: '$target_format' ($unremuxable_reason)" 2
     fi
 
-  elif check_extension "$target_format" ".hevc" && ! check_extension "$input" ".mkv .mp4 .hevc"; then
-    log_kill "Invalid $type: '$target_format' requires .mkv, .mp4 or .hevc '$input_type'" 2
+  elif check_extension "$target_format" ".hevc" && ! check_extension "$input" ".mkv .mp4 .m2ts .ts .hevc"; then
+    log_kill "Invalid $type: '$target_format' is incompatible with .${input##*.} '$B$input_type$N'" 2
   fi
 
   echo "${target_format,,}"
@@ -1216,7 +1216,7 @@ subs() {
     log ""
     mkvextract "$input" tracks "${tracks[@]}"
   else
-    log "No subtitles found in '$(basename "$input")' (--lang-codes/-c: ${SUBS_LANG_CODES:-'all'}), skipping..."
+    log "No subtitles found in '$(basename "$input")' ($B--lang-codes/-c$N: ${SUBS_LANG_CODES:-'all'}), skipping..."
   fi
 }
 
@@ -1513,7 +1513,7 @@ deduplicate_array() {
 
 option_ignored() {
   local current="$1" option="$2" reason="$3"
-  [ -n "$current" ] && log "Warning: '$B$option$N' $reason"
+  [ -n "$current" ] && log "$(yellow 'Warning:') '$B$option$N' $reason"
   echo ""
 }
 
