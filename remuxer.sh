@@ -1246,10 +1246,10 @@ help_dir() {
 }
 
 help0() {
-  local help="$1" empty_line="$2" option=${1:1:1} optionals="bxtoesqflnpcmr" line left
-  local help="$1" empty_line="$2" option=${1:1:1} line left
+  local help="$1" empty_line="$2" option="$3" line left
+  [[ -z "$option" ]] && option=${help:1:1}
 
-  [[ -n "${option// }" && "ihvN" != *"$option"* && -n "$cmd_options" && "$cmd_options" != *"$option"* ]] && return
+  [[ -n "${option// /}" && "ihvN" != *"$option"* && -n "$cmd_options" && "$cmd_options" != *"$option"* ]] && return
 
   [[ "$empty_line" = 1 && "$help_short" != 1 ]] && echo ""
   while IFS= read -r line; do
@@ -1258,10 +1258,13 @@ help0() {
     echo "  $B${left//</$N<}$N$(trim "${line:$help_left}")"
     [ "$help_short" = 1 ] && break
   done <<<"$help"
+  return 0
 }
 
 help1() {
-  help0 "$1" 1
+  local option="$1" help="$2"
+  [[ -z "$help" ]] && help="$1" && option="" || help="    $help"
+  help0 "$help" 1 "$option"
 }
 
 help() {
