@@ -1,6 +1,7 @@
 # remuxer
 
-`remuxer` is a *CLI tool* for processing ***Dolby Vision*** videos, with a focus on **CMv4.0 + P7 CMv2.9** hybrid creation.
+`remuxer` is a *CLI tool* for processing ***Dolby Vision*** videos, with a focus on **CMv4.0 + P7 CMv2.9** hybrid
+creation.
 
 > The script is partially based on **[DoVi_Scripts](https://github.com/R3S3t9999/DoVi_Scripts)**
 
@@ -15,12 +16,14 @@
 - On Unix-based systems (**Linux**, **macOS**), these are typically pre-installed.
 - On **Windows**, [Git Bash](https://git-scm.com/downloads/win) provides a compatible environment.
 
-> The script was primarily tested on **Windows** (using **Git Bash**), but should also work on other platforms with compatible external tool binaries.
+> The script was primarily tested on **Windows** (using **Git Bash**), but should also work on other platforms with
+> compatible external tool binaries.
 
 ### External Tools
 
-All required external tools must be downloaded and placed in the directory specified by the `TOOLS_DIR` variable.  
-> If a ***non-default directory*** or ***tool names*** are used, update `TOOLS_DIR` variable and the corresponding `alias` definitions at the top of the script.
+All required external tools must be downloaded and placed in the directory specified by the `TOOLS_DIR` variable.
+> If a ***non-default directory*** or ***tool names*** are used, update `TOOLS_DIR` variable and the corresponding
+`alias` definitions at the top of the script.
 
 - [`jq`](https://jqlang.org/download/) (v1.7.1)
 - [`MediaInfo`](https://mediaarea.net/en/MediaInfo/Download) (v25.04)
@@ -30,13 +33,15 @@ All required external tools must be downloaded and placed in the directory speci
     - `mkvextract.exe`
 - [`dovi_tool`](https://github.com/quietvoid/dovi_tool/releases) (v2.2.0)
 - `dovi_tool` v1.5.3 — the last version supporting `convert_to_cmv4` (required by `inject` command):
-  - A **modified build** of `dovi_tool` v1.5.3 is **included** in this repository: [tools/dovi_tool_cmv4.exe](tools/dovi_tool_cmv4.exe)
-    > This custom version skips injecting default L9 and L11 metadata during RPU conversion to CMv4.  
-    > Source: `DoVi_Scripts -> dovi_tool_2.9_to_4.0.exe`  
-    > License: [tools/LICENSE-dovi_tool_cmv4](tools/LICENSE-dovi_tool_cmv4) (thanks ***@quietvoid***)
-    
-    > **Note:** The original [v1.5.3 release](https://github.com/quietvoid/dovi_tool/releases/tag/1.5.3) *may* also work, but it has **not been tested** with `remuxer`.  
-    > For full compatibility, using the included modified version is recommended.
+    - A **modified build** of `dovi_tool` v1.5.3 is **included** in this
+      repository: [tools/dovi_tool_cmv4.exe](tools/dovi_tool_cmv4.exe)
+      > This custom version skips injecting default L9 and L11 metadata during RPU conversion to CMv4.  
+      > Source: `DoVi_Scripts -> dovi_tool_2.9_to_4.0.exe`  
+      > License: [tools/LICENSE-dovi_tool_cmv4](tools/LICENSE-dovi_tool_cmv4) (thanks ***@quietvoid***)
+
+      > **Note:** The original [v1.5.3 release](https://github.com/quietvoid/dovi_tool/releases/tag/1.5.3) *may* also
+      work, but it has **not been tested** with `remuxer`.  
+      > For full compatibility, using the included modified version is recommended.
 
 > The versions listed above are those with which `remuxer` was tested.  
 > Other versions may work, but compatibility is not guaranteed.
