@@ -103,6 +103,18 @@ echo1() {
   echo "$1"
 }
 
+printf_safe() {
+  local template="$1" arg; shift
+  for arg in "$@"; do [ -z "$arg" ] && return; done
+  printf "$template" "$@"
+}
+
+printf_if() { [ "$1" = 1 ] && printf_safe "${@:2}"; }
+logf() { printf "$1\n" "${@:2}" >&2; }
+log_t() { logf "\n$1" "${@:2}"; }
+log_b() { logf "$1\n" "${@:2}"; }
+log_c() { logf "\n$1\n" "${@:2}"; }
+
 log() {
   [ "$2" = 1 ] && echo "" >&2
   echo "$1" >&2
@@ -425,19 +437,6 @@ to_rpu_cuts() {
   echo "$output"
 }
 
-rpu_cuts_line() {
-  local input="$1" line="$2" short_sample="$3" lines
-  local -r rpu_cuts=$(to_rpu_cuts "$input" "$short_sample" 1)
-
-  ((line < 0)) && lines=$(tail -n "${line#-}" "$rpu_cuts") || lines=$(head -n "$line" "$rpu_cuts")
-
-  (($(echo "$lines" | wc -l) < ${line#-})) && return
-
-  ((line < 0)) && line=$(echo "$lines" | head -n 1) || line=$(echo "$lines" | tail -n 1)
-
-  [[ "$line" =~ ^[0-9]+$ ]] && echo "$line"
-}
-
 rpu_frames() {
   local input=$(to_rpu "$1" 0 1)
 
@@ -479,57 +478,111 @@ plot_l1() {
   fi
 }
 
-lossless_audio_info() {
-  local input="$1" infos=() audio_info result
-  mapfile -t infos < <(mediainfo "$input" --Inform='Audio;#%StreamOrder% (%Format%) %Compression_Mode%\n' | grep Lossless)
+audio_track_info() {
+  local id=$(trim "$1") format="$2" channels="$3" layout="$4" known_only="$5"
+  [[ -z "$id" ]] && return
 
-  for audio_info in "${infos[@]}"; do
-    result+="${audio_info% Lossless}, "
-  done
+  case "$format" in
+  *'DTS-UHD'*) format="DTS:X IMAX" ;;
+  *'DTS XLL X IMAX'*) format="DTS:X IMAX" ;;
+  *'DTS XLL X'*) format="DTS:X" ;;
+  *'DTS XLL'*) format="DTS-HD MA" ;;
+  *'DTS-ES'*) format="DTS-ES" ;;
+  *'DTS'*) format="DTS" ;;
+  *'MLP FBA 16-ch'*) format="TrueHD Atmos" ;;
+  *'MLP FBA'*) format="TrueHD" ;;
+  *'TrueHD'*) format="TrueHD" ;;
+  *'E-AC-3 JOC'*) format="EAC-3 Atmos" ;;
+  *'E-AC-3'*) format="EAC-3" ;;
+  *'AC-3'*) format="AC-3" ;;
+  *) [ "$known_only" = 1 ] && return ;;
+  esac
 
-  echo "${result%, }"
+  if [[ -n "$format" ]] && ((channels > 0)); then
+    [[ " $layout " == *" LFE "* ]] && format+=" $((channels - 1)).1" || format+=" $((channels)).0"
+  fi
+
+  echo "$id|$format"
 }
 
-track_info() {
-  local -r input="$1"
-  local -r inform='%Width%|%Height%|%FrameRate%|%Duration%|%HDR_Format%|%HDR_Format_Profile%|%MaxCLL%|%MaxFALL%|%MasteringDisplay_ColorPrimaries%|%MasteringDisplay_Luminance%'
-  mediainfo "$input" --Inform="Video;$inform|\n" | head -n 1
+audio_info() {
+  local input="$1" known_only="$2" lossless_only="$3" id format channels layout compression
+
+  while IFS='|' read -r id format channels layout compression; do
+    [[ "$lossless_only" = 1 && ! "$compression" =~ 'Lossless' ]] && continue
+    audio_track_info "$id" "$format" "$channels" "$layout" "$known_only"
+  done < <(mediainfo "$input" --Inform='Audio;%StreamOrder%|%Format% %Format_AdditionalFeatures%|%Channel(s)%|%ChannelLayout%|%Compression_Mode%\n')
 }
 
 video_info() {
-  local -r input="$1"
+  local input="$1" dv_profile="$2" track_info=() base_layer resolution lossless_audio
+  ! check_extension "$input" ".mkv .mp4 .m2ts .ts .hevc" && return
 
-  if ! file_exists "$input" "input" || ! check_extension "$input" ".mkv .mp4 .m2ts .ts .hevc"; then
-    return 1
+  local -r inform='%HDR_Format%|%Width%|%Height%|%FrameRate%|%MasteringDisplay_ColorPrimaries%|%MasteringDisplay_Luminance%|%MaxCLL%|%MaxFALL%'
+  IFS='|' read -ra track_info < <(mediainfo "$input" --Inform="Video;$inform|\n" | head -n 1)
+
+  while IFS='|' read -r id format; do
+    lossless_audio+="#$id ($format), "
+  done < <(audio_info "$input" 0 1)
+
+  case "$dv_profile" in
+  '') base_layer="${track_info[0]}" ;;
+  5) base_layer='ICtCp (DoVi P5)' ;;
+  *) base_layer="HDR10+P$dv_profile" ;;
+  esac
+
+  if [ -n "$base_layer" ]; then
+    base_layer+=$(printf_safe ", %s" "${track_info[4]}")
+    base_layer+=$(printf_safe " (%s)" "${track_info[5]//cd\/m2/nits}")
+    base_layer+=$(printf_safe ", MaxCLL: %s nits" "${track_info[6]%%[^0-9]*}")
+    base_layer+=$(printf_safe ", MaxFALL: %s nits" "${track_info[7]%%[^0-9]*}")
   fi
 
-  local track_info=()
-  IFS='|' read -ra track_info < <(track_info "$input")
+  resolution=$(printf_safe "%s x %s" "${track_info[1]}" "${track_info[2]}")
+  [ -n "$resolution" ] && resolution+=$(printf_safe " @ %s" "${track_info[3]}")
 
-  info[width]="${track_info[0]}"
-  info[height]="${track_info[1]}"
-  info[fps]="${track_info[2]}"
-  info[duration]="${track_info[3]}"
-
-  info[hdr_format]="${track_info[4]}"
-  info[hdr_profile]="${track_info[5]}"
-
-  info[max_cll]="${track_info[6]%%[^0-9]*}"
-  info[max_fall]="${track_info[7]%%[^0-9]*}"
-
-  info[mdcp]="${track_info[8]}"
-  info[mdl]="${track_info[9]//cd\/m2/nits}"
-
-  info[lossless]=$(lossless_audio_info "$input")
+  echo "$base_layer|$resolution|${lossless_audio%, }"
 }
 
-l5_offset() {
-  local -r input="$1" short_sample="$2" edge="$3"
-  local -r rpu_l5=$(to_rpu_l5 "$input" "$short_sample")
+rpu_cuts_line() {
+  local rpu_cuts="$1" line="$2" lines
 
-  local -r edge_offsets=$(grep "$edge" "$rpu_l5" | sort -u | grep -oE "[0-9]+" || yellow 'N/A')
-  local -r offset_min=$(echo "$edge_offsets" | head -n1) offset_max=$(echo "$edge_offsets" | tail -n1)
+  ((line < 0)) && lines=$(tail -n "${line#-}" "$rpu_cuts") || lines=$(head -n "$line" "$rpu_cuts")
 
+  (($(echo "$lines" | wc -l) < ${line#-})) && return
+
+  ((line < 0)) && line=$(echo "$lines" | head -n 1) || line=$(echo "$lines" | tail -n 1)
+  [[ "$line" =~ ^[0-9]+$ ]] && echo "$line"
+}
+
+rpu_info_cuts() {
+  local rpu_cuts="$1" line1="$2" line2="$3" cut2_type="$4"
+
+  local -r cut1=$(rpu_cuts_line "$rpu_cuts" "$line1")
+  if [[ -z "$cut1" ]]; then
+    yellow 'UNKNOWN'
+    yellow 'UNKNOWN (1st scene cut missing)'
+    return
+  fi
+
+  local -r cut2=$(rpu_cuts_line "$rpu_cuts" "$line2")
+  if [[ -n "$cut2" ]]; then
+    local difference="$((cut2 - cut1))"
+    [ "${difference#-}" = 1 ] && red 'YES' || echo 'NO (good)'
+  else
+    yellow "UNKNOWN$(printf_safe " (%s scene cut missing)" "$cut2_type")"
+  fi
+
+  [[ "$cut1" != '0' ]] && red 'NO' || echo 'YES (good)'
+}
+
+rpu_info_l5() {
+  local -r rpu_l5="$1" edge="$2"
+
+  local -r edge_offsets=$(grep "$edge" "$rpu_l5" | grep -oE "[0-9]+" | sort -nu)
+  [ -z "$edge_offsets" ] && yellow 'N/A' && return
+
+  local -r offset_min=$(head -n1 <<<"$edge_offsets") offset_max=$(tail -n1 <<<"$edge_offsets")
   if [ "$offset_min" = "$offset_max" ]; then
     [[ "$offset_min" = '0' && "$edge" != 'left' && "$edge" != 'right' ]] && yellow 0 || echo "$offset_min"
   else
@@ -537,128 +590,90 @@ l5_offset() {
   fi
 }
 
-cuts_consecutive() {
-  local -r input="$1" cut="$2" line="$3" short_sample="$4" log_cut="$5"
-  local -r cut2=$(rpu_cuts_line "$input" "$line" "$short_sample")
+rpu_info_cm4() {
+  local rpu_json="$1" short_sample="$2" quick="$3" l8_info l8_tdis l9_spis
 
-  if [[ -n "$cut2" ]]; then
-    local difference="$((cut2 - cut))"
-    [ "${difference#-}" = 1 ] && red 'YES' || echo 'NO (good)'
+  ! grep -q 'cmv40' "$rpu_json" && return
+
+  if [ "$quick" != 1 ]; then
+    rpu_json=$(to_rpu_json "$input" "$short_sample" 0)
+    local -r rpu_info=$(grep -oE '("target_display_index":[124][4578]?)|("source_primary_index":[02])' "$rpu_json" | sort -u)
+    l8_tdis=$(echo "$rpu_info" | grep 'target_display_index'); l9_spis=$(echo "$rpu_info" | grep 'source_primary_index')
   else
-    yellow "UNKNOWN${log_cut:+" ($log_cut scene cut missing)"}"
+    l8_tdis=$(grep 'target_display_index' "$rpu_json"); l9_spis=$(grep 'source_primary_index' "$rpu_json")
   fi
+
+  [[ "$l8_tdis" =~ :\ ?1 ]] && l8_info="100 nits"
+  [[ "$l8_tdis" =~ :\ ?2[45] ]] && l8_info+=", 300 nits"
+  [[ "$l8_tdis" =~ :\ ?2[78] ]] && l8_info+=", 600 nits"
+  [[ "$l8_tdis" =~ :\ ?4 ]] && l8_info+=", 1000 nits"
+  echo "${l8_info#, }"
+
+  case "$l9_spis" in
+  *2*) echo 'BT2020' ;;
+  *0*) echo 'P3' ;;
+  esac
 }
 
-rpu_info() {
-  local input="$1" short_sample="$2" quick="$3" rpu_json
+printf_info() {
+  local -r template="$1"; shift
+  printf_safe "  $template\n" "$@"
+}
 
-  input=$(to_rpu "$input" "$short_sample" 1)
-  rpu_json=$(to_rpu_json "$input" "$short_sample" 1)
+info_summary() {
+  local input="$1" short_sample="$2" quick="$3" rpu rpu_json rpu_l5 suffix rpu_cuts
+  local dv_profile base_layer resolution lossless_audio l5_top l5_bottom l5_left l5_right l8_trims l9_mdp cuts_zero cuts_cons cuts_end_cons
 
-  info[dv_profile]=$(grep 'dovi_profile' "$rpu_json" | grep -oE '[0-9]+')
+  rpu=$(to_rpu "$input" "$short_sample" 1)
+  rpu_json=$(to_rpu_json "$rpu" "$short_sample" 1)
 
-  if grep -q 'cmv40' "$rpu_json"; then
-    if [ "$quick" != 1 ]; then
-      rpu_json=$(to_rpu_json "$input" "$short_sample" 0)
-      local -r rpu_info=$(grep -oE '("target_display_index":[124][4578]?)|("source_primary_index":[02])' "$rpu_json" | sort -u)
-      local -r l8_tdis=$(echo "$rpu_info" | grep 'target_display_index') l9_spis=$(echo "$rpu_info" | grep 'source_primary_index')
-    else
-      local -r l8_tdis=$(grep 'target_display_index' "$rpu_json") l9_spis=$(grep 'source_primary_index' "$rpu_json")
-    fi
+  dv_profile=$(grep 'dovi_profile' "$rpu_json" | grep -oE '[0-9]+')
+  IFS='|' read -r base_layer resolution lossless_audio < <(video_info "$input" "$dv_profile")
 
-    [[ "$l8_tdis" =~ :\ ?1 ]] && info[l8_trims]="100 nits"
-    [[ "$l8_tdis" =~ :\ ?2[45] ]] && info[l8_trims]+="${info[l8_trims]:+, }300 nits"
-    [[ "$l8_tdis" =~ :\ ?2[78] ]] && info[l8_trims]+="${info[l8_trims]:+, }600 nits"
-    [[ "$l8_tdis" =~ :\ ?4 ]] && info[l8_trims]+="${info[l8_trims]:+, }1000 nits"
+  { read -r l8_trims; read -r l9_mdp; } < <(rpu_info_cm4 "$rpu_json" "$short_sample" "$quick")
 
-    case "$l9_spis" in
-    *2*) info[l9_mdp]='BT2020' ;;
-    *0*) info[l9_mdp]='P3' ;;
-    *) info[l9_mdp]='' ;;
-    esac
-  fi
+  rpu_l5=$(to_rpu_l5 "$rpu" "$short_sample")
+  l5_top=$(rpu_info_l5 "$rpu_l5" 'top'); l5_bottom=$(rpu_info_l5 "$rpu_l5" 'bottom')
+  l5_left=$(rpu_info_l5 "$rpu_l5" 'left'); l5_right=$(rpu_info_l5 "$rpu_l5" 'right')
 
-  info[l5_top]=$(l5_offset "$input" "$short_sample" 'top')
-  info[l5_bottom]=$(l5_offset "$input" "$short_sample" 'bottom')
-  info[l5_left]=$(l5_offset "$input" "$short_sample" 'left')
-  info[l5_right]=$(l5_offset "$input" "$short_sample" 'right')
+  rpu_cuts=$(to_rpu_cuts "$rpu" "$short_sample" 1)
+  { read -r cuts_cons; read -r cuts_zero; } < <(rpu_info_cuts "$rpu_cuts" 1 2 '2nd')
+  [ "$short_sample" != 1 ] && read -r cuts_end_cons < <(rpu_info_cuts "$rpu_cuts" -1 -2)
 
-  local -r cut1=$(rpu_cuts_line "$input" 1 "$short_sample")
-  if [[ -n "$cut1" ]]; then
-    [ "$cut1" = '0' ] && info[cuts_first]='YES (good)' || info[cuts_first]=$(red 'NO')
-    info[cuts_cons]=$(cuts_consecutive "$input" "$cut1" 2 "$short_sample" '2nd')
-  else
-    info[cuts_first]=$(yellow 'UNKNOWN (1st scene cut missing)')
-    info[cuts_cons]=$(yellow 'UNKNOWN')
-  fi
+  printf "\nRPU Input: %s%s\n" "$(basename "$rpu")" "$(printf_if "$short_sample" " (sample duration: ${EXTRACT_SHORT_SEC}s)")"
 
-  [ "$short_sample" = 1 ] && return
+  dovi_tool info -s "$rpu" | grep -E '^ '
 
-  local -r cut_last=$(rpu_cuts_line "$input" -1 "$short_sample")
-  if [[ -n "$cut_last" ]]; then
-    info[cuts_last]=$(cuts_consecutive "$input" "$cut_last" -2 "$short_sample")
-  else
-    info[cuts_last]=$(yellow 'UNKNOWN')
-  fi
+  printf_info "L8 trims: %s" "$l8_trims"
+  printf_info "L9 MDP: %s" "$l9_mdp"
+  printf_info "L5 offset: TOP=%s BOTTOM=%s, LEFT=%s, RIGHT=%s" "$l5_top" "$l5_bottom" "$l5_left" "$l5_right"
+  printf_info "1st Frame is a Scene Cut: %s" "$cuts_zero"
+  printf_info "Consecutive Scene Cuts: %s" "$cuts_cons"
+  printf_info "Consecutive Last Scene Cuts: %s" "$cuts_end_cons"
+
+  [[ -z "$base_layer" && -z "$resolution" && -z "$lossless_audio" ]] && return
+
+  printf_info "Base Layer: %s" "$base_layer"
+  printf_info "Lossless audio tracks: %s" "$lossless_audio"
+  printf_info "Resolution/FPS: %s" "$resolution"
+  printf_info "Video Input: %s" "$(basename "$input")"
 }
 
 info() {
   local input="$1" short_sample="$2" short_input="$3" quick="${4:-1}"
 
   if ! check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin'; then
-    log "Cannot print info for '$(basename "$input")' (unsupported file format), skipping..." 1
+    log_t "Cannot print info for '%s' (unsupported file format), skipping..." "$(basename "$input")"
     return
   fi
 
-  local -r rpu=$(to_rpu "$input" "$short_sample")
-
-  [ "$quick" = 0 ] && quick=''
-  log "Printing ${quick:+quick }info for: '$(basename "$input")' ..." 1
+  log_t "Printing%s info for: '%s' ..." "$(printf_if "$quick" ' quick')" "$(basename "$input")"
 
   [[ "$short_sample" = 1 && "$short_input" != 1 ]] && check_extension "$input" '.bin' && short_sample=0
 
-  declare -A info
-  video_info "$input"
-  rpu_info "$rpu" "$short_sample" "$quick"
+  info_summary "$input" "$short_sample" "$quick"
 
   [ "$INFO_L1_PLOT" = 1 ] && [[ "$short_sample" != 1 || "$OPTIONS_PLOT_SET" = 1 ]] && plot_l1 "$input" "$short_sample" 1
-
-  local input_info="RPU Input: $(basename "$rpu")"
-  [ "$short_sample" = 1 ] && input_info+=" (sample duration: ${EXTRACT_SHORT_SEC}s)"
-  echo1 "$input_info"
-
-  dovi_tool info -s "$rpu" | grep -E '^ '
-
-  [[ -n "${info[l8_trims]}" ]] && echo "  L8 trims: ${info[l8_trims]}"
-  [[ -n "${info[l9_mdp]}" ]] && echo "  L9 MDP: ${info[l9_mdp]}"
-  echo "  L5 offset: TOP=${info[l5_top]} BOTTOM=${info[l5_bottom]}, LEFT=${info[l5_left]}, RIGHT=${info[l5_right]}"
-  echo "  1st Frame is a Scene Cut: ${info[cuts_first]}"
-  echo "  Consecutive Scene Cuts: ${info[cuts_cons]}"
-  [[ -n "${info[cuts_last]}" ]] && echo "  Consecutive Last Scene Cuts: ${info[cuts_last]}"
-
-  if check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc'; then
-    local base_layer
-
-    case "${info[dv_profile]}" in
-    '') base_layer="${info[hdr_format]}" ;;
-    5) base_layer='ICtCp (DoVi P5)' ;;
-    *) base_layer="HDR10+P${info[dv_profile]}" ;;
-    esac
-
-    if [[ -n "$base_layer" ]]; then
-      base_layer="Base Layer: $base_layer"
-
-      [[ -n "${info[mdcp]}" ]] && base_layer+=", ${info[mdcp]}${info[mdl]:+ (${info[mdl]})}"
-      [[ -n "${info[max_cll]}" ]] && base_layer+=", MaxCLL: ${info[max_cll]} nits"
-      [[ -n "${info[max_fall]}" ]] && base_layer+=", MaxFALL: ${info[max_fall]} nits"
-
-      echo "  $base_layer"
-    fi
-
-    [[ -n "${info[lossless]}" ]] && echo "  Lossless audio tracks: ${info[lossless]}"
-    [[ -n "${info[width]}" && -n "${info[height]}" ]] && echo "  Resolution/FPS: ${info[width]} x ${info[height]}${info[fps]:+ @ ${info[fps]}}"
-    echo "  Video Input: $input"
-  fi
 }
 
 calculate_frame_shift() {
@@ -900,7 +915,7 @@ mp4_unremuxable() {
   local -r base_file="$1" hevc="$2" short_sample="$3" input_type="${4:-'--base-input/-b'}"
 
   [[ -z "$hevc" ]] && check_extension "$base_file" '.mp4' && return 0
-  [[ -n "$(lossless_audio_info "$base_file")" ]] && echo "'$B$input_type$N' contains lossless audio" && return 1
+  [[ -n "$(audio_info "$base_file" 0 1)" ]] && echo "'$B$input_type$N' contains lossless audio" && return 1
   [[ -n "$hevc" ]] && p7_input "$hevc" "$short_sample" && echo "'--hevc/-r' contains Dolby Vision Profile 7 layer" && return 1
   [[ -z "$hevc" ]] && p7_input "$base_file" "$short_sample" && echo "'$B$input_type$N' contains Dolby Vision Profile 7 layer" && return 1
 
@@ -1003,45 +1018,6 @@ metadata_subs() {
   esac
 }
 
-metadata_audio_title() {
-  local info="$1" infos=()
-  mapfile -t infos <<<"${info//||/$'\n'}"
-
-  local id=$(trim "${infos[0]}") format
-  [[ -z "$id" ]] && return
-
-  case "${infos[1]}" in
-  *'DTS-UHD'*) format="DTS:X IMAX" ;;
-  *'DTS XLL X IMAX'*) format="DTS:X IMAX" ;;
-  *'DTS XLL X'*) format="DTS:X" ;;
-  *'DTS XLL'*) format="DTS-HD MA" ;;
-  *'DTS-ES'*) format="DTS-ES" ;;
-  *'DTS'*) format="DTS" ;;
-  *'MLP FBA 16-ch'*) format="TrueHD Atmos" ;;
-  *'MLP FBA'*) format="TrueHD" ;;
-  *'TrueHD'*) format="TrueHD" ;;
-  *'E-AC-3 JOC'*) format="EAC-3 Atmos" ;;
-  *'E-AC-3'*) format="EAC-3" ;;
-  *'AC-3'*) format="AC-3" ;;
-  esac
-
-  if [[ -n "$format" ]] && ((infos[2] > 0)); then
-    [[ " ${infos[3]} " == *" LFE "* ]] && format+=" $((infos[2] - 1)).1" || format+=" $((infos[2])).0"
-  fi
-
-  echo "$id||$format"
-}
-
-metadata_audio() {
-  local input="$1" infos=() audio_info result
-  mapfile -t infos < <(mediainfo "$input" --Inform='Audio;%StreamOrder%||%Format% %Format_AdditionalFeatures%||%Channel(s)%||%ChannelLayout%\n')
-
-  for audio_info in "${infos[@]}"; do
-    audio_info=$(metadata_audio_title "$audio_info")
-    [[ -n "$audio_info" ]] && echo "$audio_info"
-  done
-}
-
 metadata_title() {
   local input="$(filename "$1")" title="$2" clean_filename="$3"
 
@@ -1071,9 +1047,10 @@ remux_mp4() {
   ((AUDIO_COPY_MODE < 3)) && ffmpeg_map+=(-map "0:a:0") || ffmpeg_map+=(-map "0:a?")
   if ((TRACK_NAMES_AUTO == 1)); then
     while read -r metadata; do
-      ffmpeg_metadata+=("-metadata:s:a:$((audio_track++))" "title=${metadata#*||}")
+      metadata="${metadata#*|}"
+      [ -n "$metadata" ] && ffmpeg_metadata+=("-metadata:s:a:$((audio_track++))" "title=$metadata")
       ((AUDIO_COPY_MODE < 3)) && break
-    done < <(metadata_audio "$input")
+    done < <(audio_info "$input" 1)
   fi
 
   while read -r subs; do
@@ -1121,18 +1098,15 @@ remux_mkv() {
 
   [[ -n "$hevc" ]] && mkv_merge+=("$hevc" --no-video)
 
-  while read -r metadata; do
-    id="${metadata%%||*}"
-    name="${metadata#*||}"
-
-    if [[ "$compatibility" != 1 || "$metadata" == *'AC-3'* ]]; then
+  while IFS='|' read -r id name; do
+    if [[ "$compatibility" != 1 || "$name" == *'AC-3'* ]]; then
       audio_tracks+="$id,"
       [[ "$TRACK_NAMES_AUTO" = 1 && -n "$name" ]] && audio_names+=(--track-name "$id:$name")
     fi
 
     [[ "$AUDIO_COPY_MODE" = 1 || "$compatibility" == 1 ]] && break
-    [ "$AUDIO_COPY_MODE" = 2 ] && compatibility=1 && [[ "$metadata" != *'TrueHD'* ]] && break
-  done < <(metadata_audio "$input")
+    [ "$AUDIO_COPY_MODE" = 2 ] && compatibility=1 && [[ "$name" != *'TrueHD'* ]] && break
+  done < <(audio_info "$input" 1)
   [[ "$AUDIO_COPY_MODE" != 3 && -n "$audio_tracks" ]] && mkv_merge+=(--audio-tracks "${audio_tracks%,}")
   mkv_merge+=("${audio_names[@]}")
 
