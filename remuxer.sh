@@ -598,9 +598,11 @@ rpu_info_cm4() {
   if [ "$quick" != 1 ]; then
     rpu_json=$(to_rpu_json "$input" "$short_sample" 0)
     local -r rpu_info=$(grep -oE '("target_display_index":[124][4578]?)|("source_primary_index":[02])' "$rpu_json" | sort -u)
-    l8_tdis=$(echo "$rpu_info" | grep 'target_display_index'); l9_spis=$(echo "$rpu_info" | grep 'source_primary_index')
+    l8_tdis=$(echo "$rpu_info" | grep 'target_display_index')
+    l9_spis=$(echo "$rpu_info" | grep 'source_primary_index')
   else
-    l8_tdis=$(grep 'target_display_index' "$rpu_json"); l9_spis=$(grep 'source_primary_index' "$rpu_json")
+    l8_tdis=$(grep 'target_display_index' "$rpu_json")
+    l9_spis=$(grep 'source_primary_index' "$rpu_json")
   fi
 
   [[ "$l8_tdis" =~ :\ ?1 ]] && l8_info="100 nits"
@@ -616,8 +618,7 @@ rpu_info_cm4() {
 }
 
 printf_info() {
-  local -r template="$1"; shift
-  printf_safe "  $template\n" "$@"
+  printf_safe "  $1\n" "${@:2}"
 }
 
 info_summary() {
