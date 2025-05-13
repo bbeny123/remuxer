@@ -139,7 +139,9 @@ Options:
   -i, --input <INPUT>        Input file/dir path [can be used multiple times]
   -x, --formats <F1,...,FN>  Filter files by format in dir inputs
   -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -s, --sample               Process only the first N seconds of input
+  -o, --output <OUTPUT>      Output file path [default: <print to console>]
+  -u, --frames <F1,...,FN>   Print RPU info for given frames
+  -s, --sample [<SECONDS>]   Process only the first N seconds of input
   -p, --plot <0|1>           Controls L1 plotting in info command
 ```
 
@@ -155,7 +157,7 @@ Options:
   -x, --formats <F1,...,FN>  Filter files by format in dir inputs
   -t, --input-type <TYPE>    Filter files by type in dir inputs
   -o, --output <OUTPUT>      Output file path [default: generated]
-  -s, --sample               Process only the first N seconds of input
+  -s, --sample [<SECONDS>]   Process only the first N seconds of input
 ```
 
 ### `cuts` command
@@ -170,7 +172,7 @@ Options:
   -x, --formats <F1,...,FN>  Filter files by format in dir inputs
   -t, --input-type <TYPE>    Filter files by type in dir inputs
   -o, --output <OUTPUT>      Output file path [default: generated]
-  -s, --sample               Process only the first N seconds of input
+  -s, --sample [<SECONDS>]   Process only the first N seconds of input
 ```
 
 ### `extract` command
@@ -188,7 +190,7 @@ Options:
   -e, --output-format <FORMAT>  Output format [default: bin]
   -s, --sample [<SECONDS>]      Process only the first N seconds of input
   -n, --info <0|1>              Controls intermediate info commands [default: 1]
-  -p, --plot <0|1>              Controls L1 plotting in info command [default: 1]
+  -p, --plot <0|1>              Controls L1 plotting in info command
 ```
 
 ### `frame-shift` command

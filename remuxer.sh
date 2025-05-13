@@ -39,7 +39,7 @@ FFMPEG_STRICT=1
 OPTIONS_PLOT_SET=0
 
 declare -A commands=(
-  [info]="       Show Dolby Vision information            | xtsp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [info]="       Show Dolby Vision information            | xtospu     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [plot]="       Plot L1 dynamic brightness metadata      | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [cuts]="       Extract scene-cut frame list(s)          | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [extract]="    Extract DV RPU(s) or .hevc base layer(s) | xtosenp    | .mkv, .mp4, .m2ts, .ts, .hevc"
@@ -625,7 +625,7 @@ info_summary() {
   local input="$1" short_sample="$2" quick="$3" rpu rpu_json rpu_l5 suffix rpu_cuts
   local dv_profile base_layer resolution lossless_audio l5_top l5_bottom l5_left l5_right l8_trims l9_mdp cuts_zero cuts_cons cuts_end_cons
 
-  rpu=$(to_rpu "$input" "$short_sample" 1)
+  rpu=$(to_rpu "$input" "$short_sample")
   rpu_json=$(to_rpu_json "$rpu" "$short_sample" 1)
 
   dv_profile=$(grep 'dovi_profile' "$rpu_json" | grep -oE '[0-9]+')
@@ -660,21 +660,55 @@ info_summary() {
   printf_info "Video Input: %s" "$(basename "$input")"
 }
 
+info_frames() {
+  local input="$1" short_sample="$2" frames="$3" output="$4" frame frame_info result
+  input=$(to_rpu "$input" "$short_sample")
+
+  for frame in ${frames//,/ }; do
+    ! frame_info=$(dovi_tool info -i "$input" -f "$frame") && log_kill "Error while getting info for frame '$frame'" 2
+    result+=$(printf '"%s": %s,' "$frame" "$(echo "$frame_info" | tail -n +2)")
+  done
+  result="{ ${result%,} }"
+
+  [ -n "$output" ] && echo "$result" | jq . > "$output"
+  echo "" && echo "$result" | jq .
+}
+
 info() {
-  local input="$1" short_sample="$2" short_input="$3" quick="${4:-1}"
+  local input="$1" short_sample="$2" short_input="$3" quick="${4:-1}" frames="$5" output="$6" batch="$7"
+  local input_name=$(basename "$input") type='Info' ext='txt'
 
   if ! check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin'; then
-    log_t "Cannot print info for '%s' (unsupported file format), skipping..." "$(basename "$input")"
+    log_t "Cannot print info for '%s' (unsupported file format), skipping..." "$input_name"
     return
   fi
 
-  log_t "Printing%s info for: '%s' ..." "$(printf_if "$quick" ' quick')" "$(basename "$input")"
-
   [[ "$short_sample" = 1 && "$short_input" != 1 ]] && check_extension "$input" '.bin' && short_sample=0
 
-  info_summary "$input" "$short_sample" "$quick"
+  [ "$quick" = 1 ] && type="Quick info"
+  [ -n "$frames" ] && type="Info (frame(s): $frames)" && ext='json'
 
-  [ "$INFO_L1_PLOT" = 1 ] && [[ "$short_sample" != 1 || "$OPTIONS_PLOT_SET" = 1 ]] && plot_l1 "$input" "$short_sample" 1
+  if [ -n "$output" ]; then
+    output=$(out_file "$input" "$ext" '' "$output")
+    [ "$batch" = 1 ] && output="${output%.*}_${input_name%.*}.$ext"
+  fi
+
+  log_t "Printing %s for: '%s' ..." "${type,,}" "$input_name"
+
+  if [ -n "$frames" ]; then
+    info_frames "$input" "$short_sample" "$frames" "$output"
+  elif [ -n "$output" ]; then
+    info_summary "$input" "$short_sample" "$quick" > "$output"
+    cat "$output"
+  else
+    info_summary "$input" "$short_sample" "$quick"
+  fi
+
+  [ -n "$output" ] && log_t "%s successfully printed to file: '%s'" "$type" "$output"
+
+  [ "$INFO_L1_PLOT" != 1 ] && return
+  [ "$OPTIONS_PLOT_SET" != 1 ] && [[ "$short_sample" = 1 || -n "$frames" ]] && return
+  plot_l1 "$input" "$short_sample" 1
 }
 
 calculate_frame_shift() {
@@ -1265,23 +1299,24 @@ help1() {
 }
 
 help() {
-  local cmd="$1" p s b t q bin clean; help_left=21
+  local cmd="$1" p s b t q bin clean multiple_inputs output_info default_plot_info default_output='generated' default_output_format='auto-detected'
   local -r description=${cmd_description[$cmd]:-$(cmd_info "$cmd")} formats=$(cmd_info "$cmd" 3)
   [[ "$cmd_options" == *b* ]] && b=1
-  [[ "$cmd_options" == *t* ]] && t=1
+  [[ "$cmd_options" == *t* ]] && t=1 && multiple_inputs='[ignored when multiple inputs]'
   [[ "$cmd_options" == *q* ]] && q=1
   [[ "$cmd_options" == *s* && "$INFO_L1_PLOT" != 0 ]] && s=1 || p=1
   [[ "$formats" == *bin* ]] && bin=1
-  local multiple_inputs="${t:+"[ignored when multiple inputs]"}" default_output_format='auto-detected'
   [ "$cmd" = 'extract' ] && default_output_format='bin'
+  [ "$cmd" = 'info' ] && default_output='<print to console>' && default_plot_info=" or $B--frames$N" || output_info="$multiple_inputs"
 
   case "$cmd_options" in
-  *[elc]*) help_left+=9 ;;
-  *m*) help_left+=8 ;;
-  *[fx]*) help_left+=6 ;;
-  *bs*) help_left+=5 ;;
-  *t*) help_left+=4 ;;
-  *o*) help_left+=2 ;;
+  *[elc]*) help_left+=15 ;;
+  *m*) help_left+=14 ;;
+  *[fx]*) help_left+=12 ;;
+  *[bsu]*) help_left+=11 ;;
+  *t*) help_left+=10 ;;
+  *o*) help_left+=8 ;;
+  *) help_left+=6 ;;
   esac
 
   echo "$description"
@@ -1300,10 +1335,11 @@ help() {
                                        Allowed values:
                                        $B- shows:$N  files with ${B}S01E01$N-like pattern in name
                                        $B- movies:$N non-show files"
-  help1 "-o, --output <OUTPUT>         Output file path [default: ${B}generated$N]
-                                       $multiple_inputs"
+  help1 "-o, --output <OUTPUT>         Output file path [default: $B$default_output$N]
+                                       $output_info"
   help1 "-e, --output-format <FORMAT>  Output format [default: $B$default_output_format$N]
                                        [allowed values: $B$(cmd_output_formats "$cmd")$N]"
+  help1 "-u, --frames <F1,...,FN>      Print RPU info for given frames"
   help1 "-s, --sample [<SECONDS>]      Process only the first N seconds of input
                                        [default sample duration: ${EXTRACT_SHORT_SEC}s]
                                        ${bin:+"[ignored for $B.bin$N inputs]"}"
@@ -1316,7 +1352,7 @@ help() {
   help1 "-w, --raw-rpu                 Inject input RPU instead of transferring levels"
   help1 "-n, --info <0|1>              Controls intermediate info commands [default: $B$INFO_INTERMEDIATE$N]"
   help1 "-p, --plot <0|1>              Controls L1 plotting in info command${p:+" [default: $B$INFO_L1_PLOT$N]"}
-                                       ${s:+"[default: $B$INFO_L1_PLOT$N, or ${B}0$N if $B--sample$N is used]"}"
+                                       ${s:+"[default: $B$INFO_L1_PLOT$N (${B}0$N if $B--sample$N$default_plot_info is used)]"}"
   help1 "-c, --lang-codes <C1,...,CN>  ISO 639-2 lang codes of subtitle tracks to extract
                                        [default: $B${SUBS_LANG_CODES:-all}$N; example value: 'eng,pol']"
   clean="-m, --clean-filenames <0|1>   Controls output filename cleanup [default: $B$CLEAN_FILENAMES$N]
@@ -1518,7 +1554,11 @@ parse_inputs() {
 }
 
 deduplicate_list() {
-  local -r deduplicated=$(tr ',' '\n' <<<"${1// /}" | sort -u | tr '\n' ',')
+  if [ "$2" != 1 ]; then
+    local -r deduplicated=$(tr ',' '\n' <<<"${1// /}" | sort -u | tr '\n' ',')
+  else
+    local -r deduplicated=$(tr ',' '\n' <<<"${1// /}" | sort -nu | tr '\n' ',')
+  fi
   echo "${deduplicated%,}"
 }
 
@@ -1551,7 +1591,7 @@ parse_args() {
   [[ "$cmd_options" == *t* ]] && batch=1
 
   local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir sample_duration
-  local frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto
+  local frames frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1571,6 +1611,7 @@ parse_args() {
     -o | --output)                   output=$(parse_file "$2" "$output" "$cmd" "$1" 'o' '' 0) ;;
     -e | --output-format)     output_format=$(parse_option "$2" "$output_format" "$cmd" "$1" 'e' "$(cmd_output_formats "$cmd")") ;;
     -f | --frame-shift)         frame_shift=$(parse_option "$2" "$frame_shift" "$cmd" "$1" 'f' '<number>' '-?[0-9]+') ;;
+    -u | --frames)                   frames=$(parse_option "$2" "$frames" "$cmd" "$1" 'u' '<frame-numbers>' '(0|[1-9][0-9]*)' 1) ;;
     -l | --rpu-levels)           rpu_levels=$(parse_option "$2" "$rpu_levels" "$cmd" "$1" 'l' '1-6, 8-11, 254, 255' '([1-689]|1[01]|25[45])' 1) ;;
     -n | --info)                       info=$(parse_option "$2" "$info" "$cmd" "$1" 'n' '0, 1') ;;
     -p | --plot)                       plot=$(parse_option "$2" "$plot" "$cmd" "$1" 'p' '0, 1') ;;
@@ -1600,11 +1641,12 @@ parse_args() {
   [ ${#inputs[@]} -gt 1 ] && mapfile -t inputs < <(deduplicate_array "${inputs[@]}")
 
   if [ ${#inputs[@]} -gt 1 ]; then
-    output=$(batch_ignored "$output" '--output/-o')
+    [ "$cmd" != 'info' ] && output=$(batch_ignored "$output" '--output/-o')
     subs=$(batch_ignored "$subs" '--subs')
     hevc=$(batch_ignored "$hevc" '--hevc/-r')
     title=$(batch_ignored "$title" '--title')
   else
+    batch=0
     [[ "$cmd_options" == *b* && "$base_input" == "${inputs[0]}" ]] && log_kill "${B}Input$N and '$B--base-input/-b$N' must be different files" 2 1
     [ "$skip_sync" = 1 ] && frame_shift=$(option_ignored "$frame_shift" '--frame-shift/-f' "has no effect when $B--skip-sync$N")
     [[ -n "$output" && "$clean_filenames" = 1 ]] && clean_filenames=$(option_ignored "$clean_filenames" '--clean-filenames/-m' "has no effect when $B--output$N is set")
@@ -1615,7 +1657,7 @@ parse_args() {
   [[ -n "$out_dir" ]] && OUT_DIR="$out_dir"
   [[ -n "$tmp_dir" ]] && TMP_DIR="$tmp_dir"
   [[ -n "$sample_duration" ]] && EXTRACT_SHORT_SEC="$sample_duration"
-  [[ -n "$rpu_levels" ]] && RPU_LEVELS=$(deduplicate_list "$rpu_levels")
+  [[ -n "$rpu_levels" ]] && RPU_LEVELS=$(deduplicate_list "$rpu_levels" 1)
   [[ -n "$plot" ]] && INFO_L1_PLOT="$plot" && OPTIONS_PLOT_SET=1
   [[ -n "$info" ]] && INFO_INTERMEDIATE="$info"
   [[ -n "$find_subs" ]] && SUBS_AUTODETECTION="$find_subs"
@@ -1625,12 +1667,13 @@ parse_args() {
   [[ -n "$title_auto" || -n "$title" ]] && TITLE_SHOWS_AUTO="${title_auto:-0}" && TITLE_MOVIES_AUTO="${title_auto:-0}"
   [[ -n "$tracks_auto" ]] && TRACK_NAMES_AUTO="$tracks_auto"
   [[ -n "$clean_filenames" || -n "$output" ]] && CLEAN_FILENAMES="${clean_filenames:-0}"
+  [[ -n "$frames" ]] && frames="$(deduplicate_list "$frames" 1)"
 
   tmp_trap
 
   for input in "${inputs[@]}"; do
     case "$cmd" in
-    info) info "$input" "$sample" 0 0 ;;
+    info) info "$input" "$sample" 0 0 "$frames" "$output" "$batch" ;;
     plot) plot_l1 "$input" "$sample" 0 "$output" ;;
     cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;
     extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;

@@ -53,7 +53,7 @@ _remuxer_complete() {
   fi
 
   case "$cmd" in
-  info) options="--formats --input-type --sample --plot" ;;
+  info) options="--formats --input-type --output --frames --sample --plot" ;;
   plot) options="--formats --input-type --output --sample" ;;
   cuts) options="--formats --input-type --output --sample" ;;
   extract) options="--formats --input-type --output --output-format --sample --info --plot" ;;
