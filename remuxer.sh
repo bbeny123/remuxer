@@ -42,6 +42,7 @@ declare -A commands=(
   [info]="       Show Dolby Vision information            | xtospu     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [plot]="       Plot L1 dynamic brightness metadata      | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [cuts]="       Extract scene-cut frame list(s)          | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [png]="        Extract video frame(s) as PNG image(s)   | xtok       | .mkv, .mp4, .m2ts, .ts"
   [extract]="    Extract DV RPU(s) or .hevc base layer(s) | xtosenp    | .mkv, .mp4, .m2ts, .ts, .hevc"
   [frame-shift]="Calculate frame shift                    | b          | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [sync]="       Synchronize Dolby Vision RPU files       | bofnp      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
@@ -711,6 +712,37 @@ info() {
   plot_l1 "$input" "$short_sample" 1
 }
 
+png() {
+  local input="$1" timestamps="$2" output="$3" base_output timestamped_output timestamp duration
+
+  log_t "Extracting frame(s) as PNG for: '%s' ..." "$(basename "$input")"
+
+  if [ -z "$timestamps" ]; then
+    duration=$(mediainfo "$input" --Inform="Video;%Duration%") && duration=$((${duration%%.*} / 1000))
+
+    if ((duration > 1800)); then # 30 minutes
+      timestamps="$((duration / 4)),$((duration * 2 / 4)),$((duration * 3 / 4))"
+    elif ((duration > 600)); then # 10 minutes
+      timestamps="$((duration / 3)),$((duration * 2 / 3))"
+    else
+      timestamps="$((duration / 2))"
+    fi
+  fi
+
+  [[ -z "$output" || "$timestamps" == *,* ]] && timestamped_output=1
+  output=$(out_file "$input" "png" 'FRAME' "$output") && base_output="${output%.*}"
+
+  for timestamp in ${timestamps//,/ }; do
+    [ "$timestamped_output" = 1 ] && output="${base_output}_${timestamp//:/}.png"
+    log_t "Extracting frame at approx. %s%s to '%s'. .." "$timestamp" "${duration:+s}" "$(basename "$output")"
+    [[ -e "$output" ]] && logf "Output file '%s' already exists, skipping..." "$output" && continue
+
+    ffmpeg -ss "$timestamp" -i "$input" -frames:v 1 "$output"
+  done
+
+  log_t "Frame(s) successfully extracted"
+}
+
 calculate_frame_shift() {
   local -r cuts_file="$1" cuts_base_file="$2" fast="$3"
 
@@ -1280,11 +1312,11 @@ help0() {
   local help="$1" empty_line="$2" option="$3" line left
   [[ -z "$option" ]] && option=${help:1:1}
 
-  [[ -n "${option// /}" && "ihvN" != *"$option"* && -n "$cmd_options" && "$cmd_options" != *"$option"* ]] && return
+  [[ -n "${option// /}" && -n "$cmd_options" && "ihvN" != *"$option"* && "$cmd_options" != *"$option"* ]] && return
 
   [[ "$empty_line" = 1 && "$help_short" != 1 ]] && echo ""
   while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    [[ "$line" =~ ^\ *$ ]] && continue
     left=${line:0:$help_left}
     echo "  $B${left//</$N<}$N$(trim "${line:$help_left}")"
     [ "$help_short" = 1 ] && break
@@ -1314,7 +1346,7 @@ help() {
   *m*) help_left+=14 ;;
   *[fx]*) help_left+=12 ;;
   *[bsu]*) help_left+=11 ;;
-  *t*) help_left+=10 ;;
+  *[tk]*) help_left+=10 ;;
   *o*) help_left+=8 ;;
   *) help_left+=6 ;;
   esac
@@ -1340,8 +1372,10 @@ help() {
   help1 "-e, --output-format <FORMAT>  Output format [default: $B$default_output_format$N]
                                        [allowed values: $B$(cmd_output_formats "$cmd")$N]"
   help1 "-u, --frames <F1,...,FN>      Print RPU info for given frames"
+  help1 "-k, --time [<T1,...TN>]       Approx. frame timestamp(s) in ${B}[[HH:]MM:]SS$N format
+                                       [default: based on video duration (max. 3 frames)]"
   help1 "-s, --sample [<SECONDS>]      Process only the first N seconds of input
-                                       [default sample duration: ${EXTRACT_SHORT_SEC}s]
+                                       [default sample duration: $B${EXTRACT_SHORT_SEC}s$N]
                                        ${bin:+"[ignored for $B.bin$N inputs]"}"
   help1 "-q, --skip-sync               Skip RPUs sync (assumes RPUs are already in sync)"
   help1 "-f, --frame-shift <SHIFT>     Frame shift value [default: ${B}auto-calculated$N]
@@ -1412,8 +1446,8 @@ show_help() {
   echo "CLI tool for processing DV videos, with a focus on CMv4.0 + P7 CMv2.9 hybrid creation"
   echo1 "${BU}Usage:$N $REMUXER [OPTIONS] <COMMAND>"
   echo1 "${BU}Commands:$N"
-  for cmd in info plot cuts extract frame-shift sync inject subs remux; do
-    help0 "$cmd           $(cmd_info "$cmd")"
+  for cmd in info plot cuts png extract frame-shift sync inject subs remux; do
+    help0 "$cmd            $(cmd_info "$cmd")"
   done
   echo1 "${BU}Options:$N"
   help0 "-h, --help     Show help (use '$B--help$N' for a detailed version)"
@@ -1591,7 +1625,7 @@ parse_args() {
   [[ "$cmd_options" == *t* ]] && batch=1
 
   local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir sample_duration
-  local frames frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto
+  local frames frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto timestamps
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1612,6 +1646,7 @@ parse_args() {
     -e | --output-format)     output_format=$(parse_option "$2" "$output_format" "$cmd" "$1" 'e' "$(cmd_output_formats "$cmd")") ;;
     -f | --frame-shift)         frame_shift=$(parse_option "$2" "$frame_shift" "$cmd" "$1" 'f' '<number>' '-?[0-9]+') ;;
     -u | --frames)                   frames=$(parse_option "$2" "$frames" "$cmd" "$1" 'u' '<frame-numbers>' '(0|[1-9][0-9]*)' 1) ;;
+    -k | --time)                 timestamps=$(parse_option "$2" "$timestamps" "$cmd" "$1" 'k' '[[HH:]MM:]SS' '((([0-5]?[0-9]:){1,2}[0-5]?[0-9])|[0-9]+)' 1) ;;
     -l | --rpu-levels)           rpu_levels=$(parse_option "$2" "$rpu_levels" "$cmd" "$1" 'l' '1-6, 8-11, 254, 255' '([1-689]|1[01]|25[45])' 1) ;;
     -n | --info)                       info=$(parse_option "$2" "$info" "$cmd" "$1" 'n' '0, 1') ;;
     -p | --plot)                       plot=$(parse_option "$2" "$plot" "$cmd" "$1" 'p' '0, 1') ;;
@@ -1668,6 +1703,7 @@ parse_args() {
   [[ -n "$tracks_auto" ]] && TRACK_NAMES_AUTO="$tracks_auto"
   [[ -n "$clean_filenames" || -n "$output" ]] && CLEAN_FILENAMES="${clean_filenames:-0}"
   [[ -n "$frames" ]] && frames="$(deduplicate_list "$frames" 1)"
+  [[ -n "$timestamps" ]] && timestamps="$(deduplicate_list "$timestamps")"
 
   tmp_trap
 
@@ -1676,6 +1712,7 @@ parse_args() {
     info) info "$input" "$sample" 0 0 "$frames" "$output" "$batch" ;;
     plot) plot_l1 "$input" "$sample" 0 "$output" ;;
     cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;
+    png) png "$input" "$timestamps" "$output" ;;
     extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;

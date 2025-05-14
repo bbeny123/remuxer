@@ -102,7 +102,8 @@ Commands:
   info           Show Dolby Vision information
   plot           Plot L1 dynamic brightness metadata
   cuts           Extract scene-cut frame list(s)
-  extract        Extract Dolby Vision RPU(s)
+  png            Extract video frame(s) as PNG image(s)
+  extract        Extract DV RPU(s) or .hevc base layer(s)
   frame-shift    Calculate frame shift
   sync           Synchronize Dolby Vision RPU files
   inject         Sync & Inject Dolby Vision RPU
@@ -173,6 +174,23 @@ Options:
   -t, --input-type <TYPE>    Filter files by type in dir inputs
   -o, --output <OUTPUT>      Output file path [default: generated]
   -s, --sample [<SECONDS>]   Process only the first N seconds of input
+```
+
+### `png` command
+
+**Description:** Extract *video frame(s)* as `PNG` *image(s)*
+
+> Useful for checking **Dolby Vision L5** offsets by measuring black bars (e.g., using `MS Paint`)
+
+```bash
+Usage: remuxer cuts [OPTIONS] [INPUT...]
+
+Options:
+  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
+  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>    Filter files by type in dir inputs
+  -o, --output <OUTPUT>      Output file path [default: generated]
+  -k, --time [<T1,...TN>]    Approx. frame timestamp(s) in [[HH:]MM:]SS format
 ```
 
 ### `extract` command

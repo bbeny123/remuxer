@@ -17,13 +17,13 @@ _remuxer_complete() {
   cmd="${COMP_WORDS[1]}"
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    mapfile -t COMPREPLY < <(compgen -W "info plot cuts extract frame-shift sync inject subs remux" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "info plot cuts png extract frame-shift sync inject subs remux" -- "$cur")
     return
   fi
 
   case "$cmd" in
   extract) formats="mkv mp4 m2ts ts hevc"; output_formats="hevc bin" ;;
-  remux) formats="mkv mp4 m2ts ts"; output_formats="mkv mp4" ;;
+  remux | png) formats="mkv mp4 m2ts ts"; output_formats="mkv mp4" ;;
   subs) formats="mkv"; output_formats="srt" ;;
   esac
 
@@ -56,6 +56,7 @@ _remuxer_complete() {
   info) options="--formats --input-type --output --frames --sample --plot" ;;
   plot) options="--formats --input-type --output --sample" ;;
   cuts) options="--formats --input-type --output --sample" ;;
+  png) options="--formats --input-type --output --time" ;;
   extract) options="--formats --input-type --output --output-format --sample --info --plot" ;;
   frame-shift) options="--base-input" ;;
   sync) options="--base-input --output --frame-shift --info --plot" ;;
