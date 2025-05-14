@@ -671,7 +671,7 @@ info_frames() {
   done
   result="{ ${result%,} }"
 
-  [ -n "$output" ] && echo "$result" | jq . > "$output"
+  [ -n "$output" ] && echo "$result" | jq . >"$output"
   echo "" && echo "$result" | jq .
 }
 
@@ -699,7 +699,7 @@ info() {
   if [ -n "$frames" ]; then
     info_frames "$input" "$short_sample" "$frames" "$output"
   elif [ -n "$output" ]; then
-    info_summary "$input" "$short_sample" "$quick" > "$output"
+    info_summary "$input" "$short_sample" "$quick" >"$output"
     cat "$output"
   else
     info_summary "$input" "$short_sample" "$quick"
