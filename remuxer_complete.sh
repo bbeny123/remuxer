@@ -17,13 +17,13 @@ _remuxer_complete() {
   cmd="${COMP_WORDS[1]}"
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    mapfile -t COMPREPLY < <(compgen -W "info plot cuts png extract frame-shift sync inject subs remux" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "info plot frame-shift sync inject remux extract cuts subs png mp3" -- "$cur")
     return
   fi
 
   case "$cmd" in
   extract) formats="mkv mp4 m2ts ts hevc"; output_formats="hevc bin" ;;
-  remux | png) formats="mkv mp4 m2ts ts"; output_formats="mkv mp4" ;;
+  remux | png | mp3) formats="mkv mp4 m2ts ts"; output_formats="mkv mp4" ;;
   subs) formats="mkv"; output_formats="srt" ;;
   esac
 
@@ -55,14 +55,15 @@ _remuxer_complete() {
   case "$cmd" in
   info) options="--formats --input-type --output --frames --sample --plot" ;;
   plot) options="--formats --input-type --output --sample" ;;
-  cuts) options="--formats --input-type --output --sample" ;;
-  png) options="--formats --input-type --output --time" ;;
-  extract) options="--formats --input-type --output --output-format --sample --info --plot" ;;
   frame-shift) options="--base-input" ;;
   sync) options="--base-input --output --frame-shift --info --plot" ;;
   inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames" ;;
-  subs) options="--input-type --output --lang-codes --clean-filenames" ;;
   remux) options="--formats --input-type --output --output-format --subs --find-subs --copy-subs --copy-audio --hevc --title --auto-title --auto-tracks --clean-filenames" ;;
+  extract) options="--formats --input-type --output --output-format --sample --info --plot" ;;
+  cuts) options="--formats --input-type --output --sample" ;;
+  subs) options="--input-type --output --lang-codes --clean-filenames" ;;
+  png) options="--formats --input-type --output --time" ;;
+  mp3) options="--formats --input-type --output --sample" ;;
   esac
 
   [[ -n "$options" ]] && mapfile -t COMPREPLY < <(compgen -W "--input $options --out-dir --tmp-dir --help" -- "$cur")

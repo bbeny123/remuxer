@@ -41,14 +41,15 @@ OPTIONS_PLOT_SET=0
 declare -A commands=(
   [info]="       Show Dolby Vision information            | xtospu     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [plot]="       Plot L1 dynamic brightness metadata      | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [cuts]="       Extract scene-cut frame list(s)          | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [png]="        Extract video frame(s) as PNG image(s)   | xtok       | .mkv, .mp4, .m2ts, .ts"
-  [extract]="    Extract DV RPU(s) or .hevc base layer(s) | xtosenp    | .mkv, .mp4, .m2ts, .ts, .hevc"
   [frame-shift]="Calculate frame shift                    | b          | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [sync]="       Synchronize Dolby Vision RPU files       | bofnp      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [inject]="     Sync & Inject Dolby Vision RPU           | boeqflwnmp | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [subs]="       Extract .srt subtitles                   | tocm       | .mkv"
   [remux]="      Remux video file(s)                      | xtoemr     | .mkv, .mp4, .m2ts, .ts"
+  [extract]="    Extract DV RPU(s) or .hevc base layer(s) | xtosenp    | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [cuts]="       Extract scene-cut frame list(s)          | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [subs]="       Extract .srt subtitles                   | tocm       | .mkv"
+  [png]="        Extract video frame(s) as PNG image(s)   | xtok       | .mkv, .mp4, .m2ts, .ts"
+  [mp3]="        Extract audio track(s) as MP3 file(s)    | xtos       | .mkv, .mp4, .m2ts, .ts"
 )
 declare -A cmd_description=(
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
@@ -741,6 +742,45 @@ png() {
   done
 
   log_t "Frame(s) successfully extracted"
+}
+
+mp3() {
+  local input="$1" short_sample="$2" output="$3" fixed_output="${3:+1}" prefix suffix audio_info id format ffmpeg_mappings=()
+  local -r input_name=$(basename "$input")
+
+  log_c "Extracting audio track(s) as MP3 for: '%s' ..." "$input_name"
+
+  audio_info=$(audio_info "$input")
+  output=$(out_file "$input" "mp3" '' "$output") && prefix="$(dirname "$output")/" && suffix="$(basename "$output")"
+
+  if [ "$fixed_output" = 1 ]; then
+    prefix+="${suffix%.*}" && suffix=""
+    [[ "$(echo "$audio_info" | wc -l)" -gt 1 ]] && fixed_output=''
+  else
+    prefix+="AUDIO" && suffix="_${suffix%.*}"
+    [ "$short_sample" = 1 ] && suffix+="_${EXTRACT_SHORT_SEC}s"
+  fi
+
+  while IFS='|' read -r id format; do
+    if [ -z "$fixed_output" ]; then
+      output="${prefix}_${id}_"
+      output+=$(echo "${format// /-}" | tr -cd 'a-zA-Z0-9_-')
+      output+="${suffix}.mp3"
+    fi
+
+    logf "Mapping track #%s (%s) -> '%s'" "$id" "$format" "$output"
+    [[ -e "$output" ]] && log_b "Output file '%s' already exists, skipping..." "$output" && continue
+
+    ffmpeg_mappings+=(-map "0:$id" -c:a libmp3lame -q:a 2)
+    [ "$short_sample" = 1 ] && ffmpeg_mappings+=(-t "$EXTRACT_SHORT_SEC")
+    ffmpeg_mappings+=("$output")
+  done <<< "$audio_info"
+
+  if [ "${#ffmpeg_mappings[@]}" -gt 0 ]; then
+    ffmpeg -i "$input" "${ffmpeg_mappings[@]}" && log_t "Audio track(s) for '%s' successfully extracted" "$input_name"
+  else
+    logf "No audio tracks to extract for '%s', skipping...." "$input_name"
+  fi
 }
 
 calculate_frame_shift() {
@@ -1446,7 +1486,7 @@ show_help() {
   echo "CLI tool for processing DV videos, with a focus on CMv4.0 + P7 CMv2.9 hybrid creation"
   echo1 "${BU}Usage:$N $REMUXER [OPTIONS] <COMMAND>"
   echo1 "${BU}Commands:$N"
-  for cmd in info plot cuts png extract frame-shift sync inject subs remux; do
+  for cmd in info plot frame-shift sync inject remux extract cuts subs png mp3; do
     help0 "$cmd            $(cmd_info "$cmd")"
   done
   echo1 "${BU}Options:$N"
@@ -1711,14 +1751,15 @@ parse_args() {
     case "$cmd" in
     info) info "$input" "$sample" 0 0 "$frames" "$output" "$batch" ;;
     plot) plot_l1 "$input" "$sample" 0 "$output" ;;
-    cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;
-    png) png "$input" "$timestamps" "$output" ;;
-    extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
     inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$output_format" "$output" "$subs" "$title" ;;
-    subs) subs "$input" "$output" ;;
     remux) remux "$input" "$output_format" "$output" "$hevc" "$subs" "$title" ;;
+    extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
+    cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;
+    subs) subs "$input" "$output" ;;
+    png) png "$input" "$timestamps" "$output" ;;
+    mp3) mp3 "$input" "$sample" "$output" ;;
     *) log "Unknown command: $cmd" 2; show_help; exit 1 ;;
     esac
   done

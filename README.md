@@ -101,14 +101,15 @@ Usage: remuxer [OPTIONS] <COMMAND>
 Commands:
   info           Show Dolby Vision information
   plot           Plot L1 dynamic brightness metadata
-  cuts           Extract scene-cut frame list(s)
-  png            Extract video frame(s) as PNG image(s)
-  extract        Extract DV RPU(s) or .hevc base layer(s)
   frame-shift    Calculate frame shift
   sync           Synchronize Dolby Vision RPU files
   inject         Sync & Inject Dolby Vision RPU
-  subs           Extract .srt subtitles
   remux          Remux video file(s)
+  extract        Extract DV RPU(s) or .hevc base layer(s)
+  cuts           Extract scene-cut frame list(s)
+  subs           Extract .srt subtitles
+  png            Extract video frame(s) as PNG image(s)
+  mp3            Extract audio track(s) as MP3 file(s)
 
 Options:
   -h, --help     Show help (use '--help' for a detailed version)
@@ -159,56 +160,6 @@ Options:
   -t, --input-type <TYPE>    Filter files by type in dir inputs
   -o, --output <OUTPUT>      Output file path [default: generated]
   -s, --sample [<SECONDS>]   Process only the first N seconds of input
-```
-
-### `cuts` command
-
-**Description:** Extract *scene-cut* frame list(s)
-
-```bash
-Usage: remuxer cuts [OPTIONS] [INPUT...]
-
-Options:
-  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
-  -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -o, --output <OUTPUT>      Output file path [default: generated]
-  -s, --sample [<SECONDS>]   Process only the first N seconds of input
-```
-
-### `png` command
-
-**Description:** Extract *video frame(s)* as `PNG` *image(s)*
-
-> Useful for checking **Dolby Vision L5** offsets by measuring black bars (e.g., using `MS Paint`)
-
-```bash
-Usage: remuxer cuts [OPTIONS] [INPUT...]
-
-Options:
-  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
-  -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -o, --output <OUTPUT>      Output file path [default: generated]
-  -k, --time [<T1,...TN>]    Approx. frame timestamp(s) in [[HH:]MM:]SS format
-```
-
-### `extract` command
-
-**Description:** Extract *Dolby Vision RPU(s)* or `.hevc` *base layer(s)*
-
-```bash
-Usage: remuxer extract [OPTIONS] [INPUT...]
-
-Options:
-  -i, --input <INPUT>           Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>     Filter files by format in dir inputs
-  -t, --input-type <TYPE>       Filter files by type in dir inputs
-  -o, --output <OUTPUT>         Output file path [default: generated]
-  -e, --output-format <FORMAT>  Output format [default: bin]
-  -s, --sample [<SECONDS>]      Process only the first N seconds of input
-  -n, --info <0|1>              Controls intermediate info commands [default: 1]
-  -p, --plot <0|1>              Controls L1 plotting in info command
 ```
 
 ### `frame-shift` command
@@ -269,21 +220,6 @@ Options for .mkv / .mp4 output:
   -m, --clean-filenames <0|1>   Controls output filename cleanup [default: 1]
 ```
 
-### `subs` command
-
-**Description:** Extract `.srt` subtitles
-
-```bash
-Usage: remuxer subs [OPTIONS] [INPUT...]
-
-Options:
-  -i, --input <INPUT>           Input file/dir path [can be used multiple times]
-  -t, --input-type <TYPE>       Filter files by type in dir inputs
-  -o, --output <OUTPUT>         Output file path [default: generated]
-  -c, --lang-codes <C1,...,CN>  ISO 639-2 lang codes of subtitle tracks to extract
-  -m, --clean-filenames <0|1>   Controls output filename cleanup [default: 1]
-```
-
 ### `remux` command
 
 **Description:** Remux `.mkv`, `.mp4`, `.m2ts` or `.ts` file(s)
@@ -308,4 +244,86 @@ Options for .mkv / .mp4 output:
       --auto-title <0|1>        Controls generation of metadata title
       --auto-tracks <0|1>       Controls generation of some track names [default: 1]
   -m, --clean-filenames <0|1>   Controls output filename cleanup [default: 1]
+```
+
+### `extract` command
+
+**Description:** Extract *Dolby Vision RPU(s)* or `.hevc` base layer(s)
+
+```bash
+Usage: remuxer extract [OPTIONS] [INPUT...]
+
+Options:
+  -i, --input <INPUT>           Input file/dir path [can be used multiple times]
+  -x, --formats <F1,...,FN>     Filter files by format in dir inputs
+  -t, --input-type <TYPE>       Filter files by type in dir inputs
+  -o, --output <OUTPUT>         Output file path [default: generated]
+  -e, --output-format <FORMAT>  Output format [default: bin]
+  -s, --sample [<SECONDS>]      Process only the first N seconds of input
+  -n, --info <0|1>              Controls intermediate info commands [default: 1]
+  -p, --plot <0|1>              Controls L1 plotting in info command
+```
+
+### `cuts` command
+
+**Description:** Extract *scene-cut* frame list(s)
+
+```bash
+Usage: remuxer cuts [OPTIONS] [INPUT...]
+
+Options:
+  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
+  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>    Filter files by type in dir inputs
+  -o, --output <OUTPUT>      Output file path [default: generated]
+  -s, --sample [<SECONDS>]   Process only the first N seconds of input
+```
+
+### `subs` command
+
+**Description:** Extract `.srt` subtitles
+
+```bash
+Usage: remuxer subs [OPTIONS] [INPUT...]
+
+Options:
+  -i, --input <INPUT>           Input file/dir path [can be used multiple times]
+  -t, --input-type <TYPE>       Filter files by type in dir inputs
+  -o, --output <OUTPUT>         Output file path [default: generated]
+  -c, --lang-codes <C1,...,CN>  ISO 639-2 lang codes of subtitle tracks to extract
+  -m, --clean-filenames <0|1>   Controls output filename cleanup [default: 1]
+```
+
+### `png` command
+
+**Description:** Extract *video frame(s)* as `PNG` image(s)
+
+> Useful for checking **Dolby Vision L5** offsets by measuring black bars (e.g., using `MS Paint`)
+
+```bash
+Usage: remuxer png [OPTIONS] [INPUT...]
+
+Options:
+  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
+  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>    Filter files by type in dir inputs
+  -o, --output <OUTPUT>      Output file path [default: generated]
+  -k, --time [<T1,...TN>]    Approx. frame timestamp(s) in [[HH:]MM:]SS format
+```
+
+### `mp3` command
+
+**Description:** Extract *audio track(s)* as `MP3` file(s)
+
+> Useful for checking **audio tracks** alignment (e.g., using [***Sonic Visualizer***](https://github.com/sonic-visualiser/sonic-visualiser))
+
+```bash
+Usage: remuxer mp3 [OPTIONS] [INPUT...]
+
+Options:
+  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
+  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>    Filter files by type in dir inputs
+  -o, --output <OUTPUT>      Output file path [default: generated]
+  -s, --sample [<SECONDS>]   Process only the first N seconds of input
 ```
