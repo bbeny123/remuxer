@@ -22,9 +22,9 @@ _remuxer_complete() {
   fi
 
   case "$cmd" in
-  extract) formats="mkv mp4 m2ts ts hevc"; output_formats="hevc bin" ;;
-  remux | png | mp3) formats="mkv mp4 m2ts ts"; output_formats="mkv mp4" ;;
-  subs) formats="mkv"; output_formats="srt" ;;
+  extract) formats="mkv mp4 m2ts ts hevc" && output_formats="hevc bin" ;;
+  remux | png | mp3) formats="mkv mp4 m2ts ts" && output_formats="mkv mp4" ;;
+  subs) formats="mkv" && output_formats="srt" ;;
   esac
 
   case "$prev" in

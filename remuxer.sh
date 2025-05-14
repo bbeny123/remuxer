@@ -774,7 +774,7 @@ mp3() {
     ffmpeg_mappings+=(-map "0:$id" -c:a libmp3lame -q:a 2)
     [ "$short_sample" = 1 ] && ffmpeg_mappings+=(-t "$EXTRACT_SHORT_SEC")
     ffmpeg_mappings+=("$output")
-  done <<< "$audio_info"
+  done <<<"$audio_info"
 
   if [ "${#ffmpeg_mappings[@]}" -gt 0 ]; then
     ffmpeg -i "$input" "${ffmpeg_mappings[@]}" && log_t "Audio track(s) for '%s' successfully extracted" "$input_name"

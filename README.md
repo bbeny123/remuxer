@@ -315,7 +315,8 @@ Options:
 
 **Description:** Extract *audio track(s)* as `MP3` file(s)
 
-> Useful for checking **audio tracks** alignment (e.g., using [***Sonic Visualizer***](https://github.com/sonic-visualiser/sonic-visualiser))
+> Useful for checking **audio tracks** alignment (e.g., using
+> [***Sonic Visualizer***](https://github.com/sonic-visualiser/sonic-visualiser))
 
 ```bash
 Usage: remuxer mp3 [OPTIONS] [INPUT...]
