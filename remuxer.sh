@@ -790,12 +790,12 @@ mp3() {
 fix_rpu_cuts_consecutive() {
   local start="$1" end="$2" type="$3"
 
-  (( start >= end-1 )) && return
+  ((start >= end - 1)) && return
 
   logf "%s consecutive scene-cuts at the %s detected, preparing fix..." "$((end - start + 1))" "$type"
-  (( end - start > 99 )) && log_f "%s: Large number of consecutive scene-cuts detected — make sure fixing is intended" "$(yellow 'Warning')"
+  ((end - start > 99)) && log_f "%s: Large number of consecutive scene-cuts detected — make sure fixing is intended" "$(yellow 'Warning')"
 
-  printf '"%s-%s": false,' "$(( start+1 ))" "$(( end-1 ))"
+  printf '"%s-%s": false,' "$((start + 1))" "$((end - 1))"
 }
 
 fix_rpu_cuts() {
@@ -808,7 +808,7 @@ fix_rpu_cuts() {
 
   [[ "$FIX_CUTS_FIRST" != 1 && "$FIX_CUTS_CONSEC" != 1 ]] && echo "$config" && return
 
-  mapfile -t cuts < "$(to_rpu_cuts "$rpu" "${json:+1}" "$quiet")"
+  mapfile -t cuts <"$(to_rpu_cuts "$rpu" "${json:+1}" "$quiet")"
   logf ""
 
   if [[ "$FIX_CUTS_FIRST" = 1 && "${cuts[0]}" != 0 ]]; then
@@ -822,15 +822,15 @@ fix_rpu_cuts() {
   local -i start="${cuts[0]}" end="${cuts[-1]}" i
 
   i="$start" && for cut in "${cuts[@]}"; do
-    (( cut != i++ )) && ((i--)) && break
+    ((cut != i++)) && ((i--)) && break
   done
   [[ "$start" = 1 && "$FIX_CUTS_FIRST" = 1 ]] && start=0
-  config+=$(fix_rpu_cuts_consecutive "$start" "$((i-1))" 'start')
+  config+=$(fix_rpu_cuts_consecutive "$start" "$((i - 1))" 'start')
 
-  i="$end" && for (( cut=${#cuts[@]}-1 ; cut>=0 ; cut-- )) ; do
-    (( cuts[cut] != i-- )) && ((i++)) && break
+  i="$end" && for ((cut = ${#cuts[@]} - 1; cut >= 0; cut--)); do
+    ((cuts[cut] != i--)) && ((i++)) && break
   done
-  config+=$(fix_rpu_cuts_consecutive "$((i+1))" "$end" 'end')
+  config+=$(fix_rpu_cuts_consecutive "$((i + 1))" "$end" 'end')
 
   echo "$config"
 }
@@ -871,7 +871,7 @@ fix_rpu() {
   rpu=$(fix_rpu_raw "$input_rpu" "$json")
 
   config="$(fix_rpu_cuts "$rpu" "$cuts_clear" "$json" "$quiet")"
-  [ -n "$config" ] && config=$(printf '"scene_cuts": { %s },' "${config%%,}" )
+  [ -n "$config" ] && config=$(printf '"scene_cuts": { %s },' "${config%%,}")
 
   config+=$(fix_rpu_l5 "$l5")
 
@@ -884,7 +884,7 @@ fix_rpu() {
     log_b "Applying RPU fixes..."
 
     json="$(tmp_file "$rpu" "bin" 'FIX_CONFIG')"
-    printf '{ %s }' "${config%%,}" > "$json"
+    printf '{ %s }' "${config%%,}" >"$json"
 
     ! dovi_tool editor -j "$json" -o "$output" "$rpu" >&2 && log_kill "Failed to apply RPU fixes for '$rpu_name'" 2
   fi
