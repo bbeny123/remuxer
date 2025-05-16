@@ -217,8 +217,9 @@ out_file() {
 }
 
 out_hybrid() {
-  local input_name=$(filename "$1") input_base="$2" ext="$3" output="$4" raw_rpu="$5" prefix
-  [ "$raw_rpu" != 1 ] && prefix="-${RPU_LEVELS//[^0-9]/}"
+  local input_name=$(filename "$1") input_base="$2" ext="$3" output="$4" fix="$5" raw_rpu="$6" prefix
+  [ "$fix" = 1 ] && prefix="_FIXED"
+  [ "$raw_rpu" != 1 ] && prefix+="-${RPU_LEVELS//[^0-9]/}"
   out_file "$input_base" "$ext" "HYBRID$prefix-$input_name" "$output"
 }
 
@@ -1073,13 +1074,22 @@ sync_rpu() {
 }
 
 inject_rpu() {
-  local input="$1" input_base="$2" skip_sync="$3" frame_shift="$4" output="$5" exit_if_exists="$6"
-  output=$(out_hybrid "$input" "$input_base" 'bin' "$output")
+  local input="$1" input_base="$2" skip_sync="$3" frame_shift="$4" fix="$5" l5="$6" cuts_clear="$7" output="$8" exit_if_exists="$9"
+  local rpu_base rpu_synced rpu_injected rpu_cm4 rpu_fixed
+  output=$(out_hybrid "$input" "$input_base" 'bin' "$output" "$fix")
 
-  log "Creating hybrid RPU: '$(basename "$output")'..." 1
+  log_t "Creating hybrid RPU: '%s'..." "$(basename "$output")"
 
-  if [[ ! -f "$output" ]]; then
-    local rpu_base=$(to_rpu "$input_base") rpu_synced rpu_cm4
+  if [[ -f "$output" ]]; then
+    [ "$exit_if_exists" = 1 ] && log_kill "The hybrid RPU file: '$output' already exists" 2
+    logf "The hybrid RPU file: '%s' already exists, skipping..." "$output"
+    echo "$output" && return
+  fi
+
+  [ "$fix" = 1 ] && rpu_injected=$(out_hybrid "$input" "$input_base" 'bin') || rpu_injected="$output"
+
+  if [[ ! -f "$rpu_injected" ]]; then
+    rpu_base=$(to_rpu "$input_base")
 
     if [ "$skip_sync" = 1 ]; then
       log "Skipping RPU sync..."
@@ -1096,42 +1106,49 @@ inject_rpu() {
     rpu_synced=$(windows_safe_path "$rpu_synced")
     echo "{ \"source_rpu\": \"$rpu_synced\", \"rpu_levels\": [$RPU_LEVELS] }" >"$sync_config"
 
-    if ! dovi_tool editor -i "${rpu_cm4:-"$rpu_base"}" -j "$sync_config" -o "$output" >&2; then
+    if ! dovi_tool editor -i "${rpu_cm4:-"$rpu_base"}" -j "$sync_config" -o "$rpu_injected" >&2; then
       log_kill "Error while injecting RPU levels: $RPU_LEVELS of '$(basename "$rpu_synced")' into '$(basename "$rpu_base")'" 1
     fi
 
-    log "RPU levels: $RPU_LEVELS of '$(basename "$rpu_synced")' successfully injected into '$(basename "$rpu_base")' - output file: '$output'" 1
-
-    if [ "$INFO_INTERMEDIATE" = 1 ]; then
-      info "$rpu_base" >&2
-      info "$rpu_synced" >&2
-      info "$output" >&2
-    fi
-  elif [ "$exit_if_exists" = 1 ]; then
-    log_kill "The hybrid RPU file: '$output' already exists" 2
+    log "RPU levels: $RPU_LEVELS of '$(basename "$rpu_synced")' successfully injected into '$(basename "$rpu_base")' - output file: '$rpu_injected'" 1
   else
-    log "The hybrid RPU file: '$output' already exists, skipping..."
+    logf "The hybrid RPU file: '%s' already exists, skipping..." "$rpu_injected"
+  fi
+
+  if [ "$fix" = 1 ]; then
+    rpu_fixed=$(fix_rpu "$rpu_injected" "$l5" "$cuts_clear" "" "$output" 1)
+    [[ ! "$rpu_fixed" -ef "$output" ]] && cp "$rpu_fixed" "$output"
+  fi
+
+  if [ "$INFO_INTERMEDIATE" = 1 ]; then
+    [ -n "$rpu_base" ] && info "$rpu_base" >&2
+    [ -n "$rpu_synced" ] && info "$rpu_synced" >&2
+    [ "$fix" = 1 ] && [[ -z "$rpu_fixed" || ! "$rpu_injected" -ef "$rpu_fixed" ]] && info "$rpu_injected" >&2
+    info "$output" >&2
   fi
 
   echo "$output"
 }
 
 inject_hevc() {
-  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" output="$6" exit_if_exists="$7" rpu_type='Raw' rpu_injected
+  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" fix="$6" l5="$7" cuts_clear="$8" output="$9" exit_if_exists="${10}" rpu_type='Raw' rpu_injected
 
-  output=$(out_hybrid "$input" "$input_base" 'hevc' "$output" "$raw_rpu")
+  output=$(out_hybrid "$input" "$input_base" 'hevc' "$output" "$fix" "$raw_rpu")
   log "Creating hybrid base layer: '$(basename "$output")'..." 1
 
   if [[ ! -f "$output" ]]; then
     if [ "$raw_rpu" != 1 ]; then
       rpu_type='Hybrid'
-      rpu_injected=$(inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift")
+      rpu_injected=$(inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift" "$fix" "$l5" "$cuts_clear")
+      fix=0
     elif [ "$skip_sync" != 1 ]; then
       rpu_injected=$(sync_rpu "$input" "$input_base" "$frame_shift" 1)
     else
       log "Skipping raw RPU sync..." 1
       rpu_injected=$(to_rpu "$input")
     fi
+
+    [ "$fix" = 1 ] && rpu_injected=$(fix_rpu "$rpu_injected" "$l5" "$cuts_clear" "" "" 1)
 
     local -r hevc=$(to_hevc "$input_base") base_name=$(basename "$input_base")
 
@@ -1390,26 +1407,27 @@ remux() {
 }
 
 inject() {
-  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" output_format="$6" output="$7" subs="$8" title="$9" type
+  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" l5="$6" cuts_clear="$7" output_format="$8" output="$9" subs="${10}" title="${11}" fix type
 
   check_extension "$input_base" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
   check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
 
   output_format=$(target_format "$input_base" "$output_format" "$output" '.mkv .mp4 .hevc .bin')
+  [[ -n "$l5" || -n "$cuts_clear" || "$FIX_CUTS_FIRST" = 1 || "$FIX_CUTS_CONSEC" = 1 ]] && fix=1
 
   [ "$raw_rpu" = 1 ] && type='raw RPU' || type="RPU levels: $RPU_LEVELS"
   log "Injecting $type of '$(basename "$input")' into '$(basename "$input_base")'..." 1
 
   if [[ "$output_format" == *bin* ]]; then
     [ "$raw_rpu" = 1 ] && log_kill "'$B--raw-rpu/-w$N' cannot be used with .bin outputs" 2
-    inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift" "$output" 1 >/dev/null
+    inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift" "$fix" "$l5" "$cuts_clear" "$output" 1 >/dev/null
   elif [[ "$output_format" == *hevc* ]]; then
-    inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift" "$output" 1 >/dev/null
+    inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift" "$fix" "$l5" "$cuts_clear" "$output" 1 >/dev/null
   else
-    output=$(out_file "$input_base" "$output_format" "HYBRID" "$output" "$CLEAN_FILENAMES")
+    output=$(out_file "$input_base" "$output_format" "HYBRID${fix:+"_FIXED"}" "$output" "$CLEAN_FILENAMES")
     [[ -f "$output" ]] && log "Hybrid output file: '$(basename "$output")' already exists, skipping..." && return
 
-    local hevc=$(inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift")
+    local hevc=$(inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift" "$fix" "$l5" "$cuts_clear")
 
     log "Injecting hybrid base layer: '$(basename "$hevc")' into '$(basename "$input_base")'..." 1
     remux "$input_base" "$output_format" "$output" "$hevc" "$subs" "$title" 0
@@ -1911,7 +1929,7 @@ parse_args() {
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
     fix) fix_rpu "$input" "$l5" "$cuts_clear" "$json" "$output" 0 >/dev/null ;;
-    inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$output_format" "$output" "$subs" "$title" ;;
+    inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$l5" "$cuts_clear" "$output_format" "$output" "$subs" "$title" ;;
     remux) remux "$input" "$output_format" "$output" "$hevc" "$subs" "$title" ;;
     extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
     cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;

@@ -221,26 +221,30 @@ Options:
 Usage: remuxer inject [OPTIONS] --base-input <BASE-INPUT> [INPUT]
 
 Options:
-  -i, --input <INPUT>           Input file path
-  -b, --base-input <INPUT>      Base input file path [required]
-  -o, --output <OUTPUT>         Output file path [default: generated]
-  -e, --output-format <FORMAT>  Output format [default: auto-detected]
-  -q, --skip-sync               Skip RPUs sync (assumes RPUs are already in sync)
-  -f, --frame-shift <SHIFT>     Frame shift value [default: auto-calculated]
-  -l, --rpu-levels <L1,...,LN>  RPU levels to inject [default: 3,8,9,11,254]
-  -w, --raw-rpu                 Inject input RPU instead of transferring levels
-  -n, --info <0|1>              Controls intermediate info commands [default: 1]
-  -p, --plot <0|1>              Controls L1 plotting in info command [default: 1]
+  -i, --input <INPUT>             Input file path
+  -b, --base-input <INPUT>        Base input file path [required]
+  -o, --output <OUTPUT>           Output file path [default: generated]
+  -e, --output-format <FORMAT>    Output format [default: auto-detected]
+  -q, --skip-sync                 Skip RPUs sync (assumes RPUs are already in sync)
+  -f, --frame-shift <SHIFT>       Frame shift value [default: auto-calculated]
+  -l, --rpu-levels <L1[,...]>     RPU levels to inject [default: 3,8,9,11,254]
+  -w, --raw-rpu                   Inject input RPU instead of transferring levels
+      --l5 <T,B[,L,R]>            Set Dolby Vision L5 active area offsets
+      --cuts-clear <FS-FE[,...]>  Clear scene-cut flag in specified frame ranges
+      --cuts-first <0|1>          Force first frame as scene-cut [default: 1]
+      --cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: 1]
+  -n, --info <0|1>                Controls intermediate info commands [default: 1]
+  -p, --plot <0|1>                Controls L1 plotting in info command [default: 1]
 
 Options for .mkv / .mp4 output:
-      --subs <FILE>             .srt subtitle file path to include
-      --find-subs <0|1>         Controls subtitles auto-detection [default: 1]
-      --copy-subs <OPTION>      Controls input subtitle tracks to copy [default: 1]
-      --copy-audio <OPTION>     Controls input audio tracks to copy [default: 3]
-      --title <TITLE>           Metadata title (e.g., movie name)
-      --auto-title <0|1>        Controls generation of metadata title
-      --auto-tracks <0|1>       Controls generation of some track names [default: 1]
-  -m, --clean-filenames <0|1>   Controls output filename cleanup [default: 1]
+      --subs <FILE>               .srt subtitle file path to include
+      --find-subs <0|1>           Controls subtitles auto-detection [default: 1]
+      --copy-subs <OPTION>        Controls input subtitle tracks to copy [default: 1]
+      --copy-audio <OPTION>       Controls input audio tracks to copy [default: 3]
+      --title <TITLE>             Metadata title (e.g., movie name)
+      --auto-title <0|1>          Controls generation of metadata title
+      --auto-tracks <0|1>         Controls generation of some track names [default: 1]
+  -m, --clean-filenames <0|1>     Controls output filename cleanup [default: 1]
 ```
 
 ### `remux` command
