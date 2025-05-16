@@ -925,8 +925,8 @@ calculate_frame_shift() {
   mapfile -t cuts2 <"$cuts_base_file"
   local -ri size1=${#cuts1[@]} size2=${#cuts2[@]}
 
-  local -i max_misses=10 max_offset=10 min_matches=$((size2 / 2))
-  [ "$fast" != 1 ] && max_offset=20 && max_misses="$min_matches"
+  local -i max_misses=10 max_offset=100 min_matches=$((size2 / 2))
+  [ "$fast" != 1 ] && max_misses="$min_matches"
   local -ri max_offset1=$((size1 > max_offset ? max_offset : size1)) max_offset2=$((size2 > max_offset ? max_offset : size2))
 
   local -i offset1 offset2 offset shift first_cut last_cut cut matches misses
