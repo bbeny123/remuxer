@@ -105,6 +105,7 @@ Commands:
   plot           Plot L1 dynamic brightness metadata
   frame-shift    Calculate frame shift
   sync           Synchronize Dolby Vision RPU files
+  fix            Fix or adjust Dolby Vision RPU(s)
   inject         Sync & Inject Dolby Vision RPU
   remux          Remux video file(s)
   extract        Extract DV RPU(s) or .hevc base layer(s)
@@ -140,13 +141,13 @@ Options:
 Usage: remuxer info [OPTIONS] [INPUT...]
 
 Options:
-  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
-  -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -o, --output <OUTPUT>      Output file path [default: <print to console>]
-  -u, --frames <F1,...,FN>   Print RPU info for given frames
-  -s, --sample [<SECONDS>]   Process only the first N seconds of input
-  -p, --plot <0|1>           Controls L1 plotting in info command
+  -i, --input <INPUT>       Input file/dir path [can be used multiple times]
+  -x, --formats <F1[,...]>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>   Filter files by type in dir inputs
+  -o, --output <OUTPUT>     Output file path [default: <print to console>]
+  -u, --frames <F1[,...]>   Print RPU info for given frames
+  -s, --sample [<SECONDS>]  Process only the first N seconds of input
+  -p, --plot <0|1>          Controls L1 plotting in info command
 ```
 
 ### `plot` command
@@ -157,11 +158,11 @@ Options:
 Usage: remuxer plot [OPTIONS] [INPUT...]
 
 Options:
-  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
-  -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -o, --output <OUTPUT>      Output file path [default: generated]
-  -s, --sample [<SECONDS>]   Process only the first N seconds of input
+  -i, --input <INPUT>       Input file/dir path [can be used multiple times]
+  -x, --formats <F1[,...]>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>   Filter files by type in dir inputs
+  -o, --output <OUTPUT>     Output file path [default: generated]
+  -s, --sample [<SECONDS>]  Process only the first N seconds of input
 ```
 
 ### `frame-shift` command
@@ -256,7 +257,7 @@ Usage: remuxer remux [OPTIONS] [INPUT...]
 
 Options:
   -i, --input <INPUT>           Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>     Filter files by format in dir inputs
+  -x, --formats <F1[,...]>      Filter files by format in dir inputs
   -t, --input-type <TYPE>       Filter files by type in dir inputs
   -o, --output <OUTPUT>         Output file path [default: generated]
   -e, --output-format <FORMAT>  Output format [default: auto-detected]
@@ -282,7 +283,7 @@ Usage: remuxer extract [OPTIONS] [INPUT...]
 
 Options:
   -i, --input <INPUT>           Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>     Filter files by format in dir inputs
+  -x, --formats <F1[,...]>      Filter files by format in dir inputs
   -t, --input-type <TYPE>       Filter files by type in dir inputs
   -o, --output <OUTPUT>         Output file path [default: generated]
   -e, --output-format <FORMAT>  Output format [default: bin]
@@ -299,11 +300,11 @@ Options:
 Usage: remuxer cuts [OPTIONS] [INPUT...]
 
 Options:
-  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
-  -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -o, --output <OUTPUT>      Output file path [default: generated]
-  -s, --sample [<SECONDS>]   Process only the first N seconds of input
+  -i, --input <INPUT>       Input file/dir path [can be used multiple times]
+  -x, --formats <F1[,...]>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>   Filter files by type in dir inputs
+  -o, --output <OUTPUT>     Output file path [default: generated]
+  -s, --sample [<SECONDS>]  Process only the first N seconds of input
 ```
 
 ### `subs` command
@@ -314,11 +315,11 @@ Options:
 Usage: remuxer subs [OPTIONS] [INPUT...]
 
 Options:
-  -i, --input <INPUT>           Input file/dir path [can be used multiple times]
-  -t, --input-type <TYPE>       Filter files by type in dir inputs
-  -o, --output <OUTPUT>         Output file path [default: generated]
-  -c, --lang-codes <C1,...,CN>  ISO 639-2 lang codes of subtitle tracks to extract
-  -m, --clean-filenames <0|1>   Controls output filename cleanup [default: 1]
+  -i, --input <INPUT>          Input file/dir path [can be used multiple times]
+  -t, --input-type <TYPE>      Filter files by type in dir inputs
+  -o, --output <OUTPUT>        Output file path [default: generated]
+  -c, --lang-codes <C1[,...]>  ISO 639-2 lang codes of subtitle tracks to extract
+  -m, --clean-filenames <0|1>  Controls output filename cleanup [default: 1]
 ```
 
 ### `png` command
@@ -331,11 +332,11 @@ Options:
 Usage: remuxer png [OPTIONS] [INPUT...]
 
 Options:
-  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
-  -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -o, --output <OUTPUT>      Output file path [default: generated]
-  -k, --time [<T1,...TN>]    Approx. frame timestamp(s) in [[HH:]MM:]SS format
+  -i, --input <INPUT>       Input file/dir path [can be used multiple times]
+  -x, --formats <F1[,...]>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>   Filter files by type in dir inputs
+  -o, --output <OUTPUT>     Output file path [default: generated]
+  -k, --time [<T1[,...]>]   Approx. frame timestamp(s) in [[HH:]MM:]SS format
 ```
 
 ### `mp3` command
@@ -349,9 +350,9 @@ Options:
 Usage: remuxer mp3 [OPTIONS] [INPUT...]
 
 Options:
-  -i, --input <INPUT>        Input file/dir path [can be used multiple times]
-  -x, --formats <F1,...,FN>  Filter files by format in dir inputs
-  -t, --input-type <TYPE>    Filter files by type in dir inputs
-  -o, --output <OUTPUT>      Output file path [default: generated]
-  -s, --sample [<SECONDS>]   Process only the first N seconds of input
+  -i, --input <INPUT>       Input file/dir path [can be used multiple times]
+  -x, --formats <F1[,...]>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>   Filter files by type in dir inputs
+  -o, --output <OUTPUT>     Output file path [default: generated]
+  -s, --sample [<SECONDS>]  Process only the first N seconds of input
 ```
