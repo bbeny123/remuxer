@@ -5,7 +5,7 @@ shopt -s expand_aliases
 readonly N=$(tput sgr0) B=$(tput bold) U=$(tput smul)
 readonly RED=$(tput setaf 1) YELLOW=$(tput setaf 3)
 readonly BU="$B$U"
-readonly REMUXER="$B$(basename "$0")$N" VERSION="1.0.3"
+readonly REMUXER="$B$(basename "$0")$N" VERSION="2.0.0"
 readonly START_TIME=$(date +%s%1N)
 readonly DEBUG_LOG='0'
 readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/tools"
