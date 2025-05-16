@@ -17,7 +17,7 @@ _remuxer_complete() {
   cmd="${COMP_WORDS[1]}"
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    mapfile -t COMPREPLY < <(compgen -W "info plot frame-shift sync inject remux extract cuts subs png mp3" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "info plot frame-shift sync fix inject remux extract cuts subs png mp3" -- "$cur")
     return
   fi
 
@@ -28,7 +28,7 @@ _remuxer_complete() {
   esac
 
   case "$prev" in
-  -[ibor] | --input | --base-input | --output | --hevc | --subs)
+  -[iborj] | --input | --base-input | --output | --hevc | --subs | --json)
     _remuxer_complete_path "$cur" && return ;;
   --out-dir | --tmp-dir)
     _remuxer_complete_path "$cur" '-d' && return ;;
@@ -36,11 +36,11 @@ _remuxer_complete() {
   -e | --output-format) values="$output_formats" ;;
   -t | --input-type) values="shows movies" ;;
   -l | --rpu-levels) values="1 2 3 4 5 6 8 9 10 11 254 255" ;;
-  -[npm] | --info | --plot | --clean-filenames | --find-subs | --auto-title | --auto-tracks) values="0 1" ;;
+  -[npm] | --info | --plot | --clean-filenames | --find-subs | --auto-title | --auto-tracks | --cuts-first | --cuts-consecutive) values="0 1" ;;
   -c | --lang-codes) values="pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-subs) values="0 1 pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-audio) values="1 2 3" ;;
-  -f | --frame-shift | --title) return ;;
+  -[fuk] | --frame-shift | --title | --frames | --time | --l5 | --cuts-clear) return ;;
   esac
 
   if [[ -n "$values" ]]; then
@@ -57,7 +57,8 @@ _remuxer_complete() {
   plot) options="--formats --input-type --output --sample" ;;
   frame-shift) options="--base-input" ;;
   sync) options="--base-input --output --frame-shift --info --plot" ;;
-  inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames" ;;
+  fix) options="--formats --input-type --output --info --l5 --cuts-clear --cuts-first --cuts-consecutive --json --json-examples" ;;
+  inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames --l5 --cuts-clear --cuts-first --cuts-consecutive" ;;
   remux) options="--formats --input-type --output --output-format --subs --find-subs --copy-subs --copy-audio --hevc --title --auto-title --auto-tracks --clean-filenames" ;;
   extract) options="--formats --input-type --output --output-format --sample --info --plot" ;;
   cuts) options="--formats --input-type --output --sample" ;;

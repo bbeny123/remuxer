@@ -26,6 +26,8 @@ TMP_DIR="$(pwd)/temp$START_TIME" # caution: This dir will be removed only if it 
 RPU_LEVELS="3,8,9,11,254"
 INFO_INTERMEDIATE='1'  # 0 - disabled,       1 - enabled
 INFO_L1_PLOT='1'       # 0 - disabled,       1 - enabled
+FIX_CUTS_FIRST='1'     # 0 - disabled,       1 - enabled
+FIX_CUTS_CONSEC='1'    # 0 - disabled,       1 - enabled
 CLEAN_FILENAMES='1'    # 0 - disabled,       1 - enabled
 SUBS_AUTODETECTION='1' # 0 - disabled,       1 - enabled
 TITLE_SHOWS_AUTO='0'   # 0 - disabled,       1 - enabled
@@ -39,17 +41,18 @@ FFMPEG_STRICT=1
 OPTIONS_PLOT_SET=0
 
 declare -A commands=(
-  [info]="       Show Dolby Vision information            | xtospu     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [plot]="       Plot L1 dynamic brightness metadata      | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [frame-shift]="Calculate frame shift                    | b          | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [sync]="       Synchronize Dolby Vision RPU files       | bofnp      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [inject]="     Sync & Inject Dolby Vision RPU           | boeqflwnmp | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [remux]="      Remux video file(s)                      | xtoemr     | .mkv, .mp4, .m2ts, .ts"
-  [extract]="    Extract DV RPU(s) or .hevc base layer(s) | xtosenp    | .mkv, .mp4, .m2ts, .ts, .hevc"
-  [cuts]="       Extract scene-cut frame list(s)          | xtos       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [subs]="       Extract .srt subtitles                   | tocm       | .mkv"
-  [png]="        Extract video frame(s) as PNG image(s)   | xtok       | .mkv, .mp4, .m2ts, .ts"
-  [mp3]="        Extract audio track(s) as MP3 file(s)    | xtos       | .mkv, .mp4, .m2ts, .ts"
+  [info]="       Show Dolby Vision information            | xtospu      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="       Plot L1 dynamic brightness metadata      | xtos        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [frame-shift]="Calculate frame shift                    | b           | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [sync]="       Synchronize Dolby Vision RPU files       | bofnp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [fix]="        Fix or adjust Dolby Vision RPU(s)        | xtojnF      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [inject]="     Sync & Inject Dolby Vision RPU           | boeqflwnmpF | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [remux]="      Remux video file(s)                      | xtoemr      | .mkv, .mp4, .m2ts, .ts"
+  [extract]="    Extract DV RPU(s) or .hevc base layer(s) | xtosenp     | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [cuts]="       Extract scene-cut frame list(s)          | xtos        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [subs]="       Extract .srt subtitles                   | tocm        | .mkv"
+  [png]="        Extract video frame(s) as PNG image(s)   | xtok        | .mkv, .mp4, .m2ts, .ts"
+  [mp3]="        Extract audio track(s) as MP3 file(s)    | xtos        | .mkv, .mp4, .m2ts, .ts"
 )
 declare -A cmd_description=(
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
@@ -783,6 +786,136 @@ mp3() {
   fi
 }
 
+fix_rpu_cuts_consecutive() {
+  local start="$1" end="$2" type="$3"
+
+  (( start >= end-1 )) && return
+
+  logf "%s consecutive scene-cuts at the %s detected, preparing fix..." "$((end - start + 1))" "$type"
+  (( end - start > 99 )) && log_f "%s: Large number of consecutive scene-cuts detected — make sure fixing is intended" "$(yellow 'Warning')"
+
+  printf '"%s-%s": false,' "$(( start+1 ))" "$(( end-1 ))"
+}
+
+fix_rpu_cuts() {
+  local rpu="$1" cuts_clear="$2" json="$3" quiet="$4" cuts=() cut config range
+
+  [ -n "$cuts_clear" ] && for range in ${cuts_clear//,/ }; do
+    [[ "$range" != *-* ]] && range+="-$range"
+    config+=$(printf '"%s": false,' "$range")
+  done
+
+  [[ "$FIX_CUTS_FIRST" != 1 && "$FIX_CUTS_CONSEC" != 1 ]] && echo "$config" && return
+
+  mapfile -t cuts < "$(to_rpu_cuts "$rpu" "${json:+1}" "$quiet")"
+  logf ""
+
+  if [[ "$FIX_CUTS_FIRST" = 1 && "${cuts[0]}" != 0 ]]; then
+    logf "First frame is not a scene-cut, preparing fix..."
+    config+='"0-0": true,'
+  fi
+
+  [ "$FIX_CUTS_CONSEC" != 1 ] && echo "$config" && return
+  [ ${#cuts[@]} -eq 0 ] && logf "No scene-cuts found, skipping consecutive scene-cut fixes..." && echo "$config" && return
+
+  local -i start="${cuts[0]}" end="${cuts[-1]}" i
+
+  i="$start" && for cut in "${cuts[@]}"; do
+    (( cut != i++ )) && ((i--)) && break
+  done
+  [[ "$start" = 1 && "$FIX_CUTS_FIRST" = 1 ]] && start=0
+  config+=$(fix_rpu_cuts_consecutive "$start" "$((i-1))" 'start')
+
+  i="$end" && for (( cut=${#cuts[@]}-1 ; cut>=0 ; cut-- )) ; do
+    (( cuts[cut] != i-- )) && ((i++)) && break
+  done
+  config+=$(fix_rpu_cuts_consecutive "$((i+1))" "$end" 'end')
+
+  echo "$config"
+}
+
+fix_rpu_l5() {
+  local l5="$1" top bottom left right offsets
+  [ -z "$l5" ] && return
+
+  IFS=',' read -r top bottom left right <<<"$l5"
+  offsets=$(printf '"top": %s, "bottom": %s, "left": %s, "right": %s' "$top" "$bottom" "${left:-0}" "${right:-0}")
+
+  printf '"active_area": { "presets": [ { "id": 0, %s } ], "edits": { "all": 0 } }' "$offsets"
+}
+
+fix_rpu_raw() {
+  local rpu="$1" json="$2" raw_edited
+  [ -z "$json" ] && echo "$rpu" && return
+
+  log_c "Applying raw JSON config: '%s'..." "$(basename "$json")"
+
+  raw_edited=$(tmp_file "$rpu" "bin" 'RAW_EDITED')
+  [[ -e "$raw_edited" ]] && log_b "Output file '%s' already exists, skipping..." "$raw_edited" && echo "$rpu" && return
+
+  ! dovi_tool editor -j "$json" -o "$raw_edited" "$rpu" >&2 && log_kill "Failed to apply raw JSON config for '$(basename "$rpu")'" 2
+
+  log_t "Raw JSON config successfully applied"
+  echo "$raw_edited"
+}
+
+fix_rpu() {
+  local input="$1" l5="$2" cuts_clear="$3" json="$4" output="$5" quiet="${6:-1}" rpu rpu_name config
+  rpu=$(to_rpu "$input" 0 "$quiet") && rpu_name=$(basename "$rpu")
+  output=$(out_file "$rpu" "bin" 'FIXED' "$output")
+
+  log_t "Fixing RPU: '%s' ..." "$rpu_name"
+  [[ -e "$output" ]] && logf "Fixed RPU file '%s' already exists, skipping..." "$output" && echo "$output" && return
+
+  rpu=$(fix_rpu_raw "$rpu" "$json")
+
+  config="$(fix_rpu_cuts "$rpu" "$cuts_clear" "$json" "$quiet")"
+  [ -n "$config" ] && config=$(printf '"scene_cuts": { %s },' "${config%%,}" )
+
+  config+=$(fix_rpu_l5 "$l5")
+
+  [[ -z "$config" && -z "$json" ]] && logf "Nothing to fix — skipping..." && echo "$rpu" && return
+
+  if [ -z "$config" ]; then
+    mv "$rpu" "$output"
+    logf "No auto-fixable issues found, skipping..."
+  else
+    log_b "Applying RPU fixes..."
+
+    json="$(tmp_file "$rpu" "bin" 'FIX_CONFIG')"
+    printf '{ %s }' "${config%%,}" > "$json"
+
+    ! dovi_tool editor -j "$json" -o "$output" "$rpu" >&2 && log_kill "Failed to apply RPU fixes for '$rpu_name'" 2
+  fi
+
+  log_t "RPU: '%s' fixed successfully - output: '%s'" "$rpu_name" "$(basename "$output")"
+  echo "$output"
+}
+
+fix_rpu_examples() {
+  local output="$1" example='{
+    "active_area": {
+      "presets": [
+        { "id": 0, "top": 270, "bottom": 270, "left": 0, "right": 0 },
+        { "id": 1, "top": 130, "bottom": 130, "left": 0, "right": 0 }
+      ],
+      "edits": { "all": 0, "150-300": 1 }
+    },
+    "scene_cuts": { "all": true, "0-39": false }
+  }'
+
+  echo "$example" | jq .
+  log_t "For more examples and information, visit: https://github.com/quietvoid/dovi_tool/blob/main/docs/editor.md"
+
+  [ -z "$output" ] && return || output=$(out_file "$input" "json" '' "$output")
+
+  log_t "Saving JSON config example to '%s'..." "$(basename "$output")"
+  [[ -e "$output" ]] && logf "Output file '%s' already exists, skipping..." "$output" && return
+
+  echo "$example" | jq . >"$output"
+  logf "JSON config example saved to '%s'" "$output"
+}
+
 calculate_frame_shift() {
   local -r cuts_file="$1" cuts_base_file="$2" fast="$3"
 
@@ -1382,11 +1515,12 @@ help() {
   [ "$cmd" = 'info' ] && default_output='<print to console>' && default_plot_info=" or $B--frames$N" || output_info="$multiple_inputs"
 
   case "$cmd_options" in
-  *[elc]*) help_left+=15 ;;
-  *m*) help_left+=14 ;;
-  *[fx]*) help_left+=12 ;;
-  *[bsu]*) help_left+=11 ;;
-  *[tk]*) help_left+=10 ;;
+  *F*) help_left+=17 ;;
+  *e*) help_left+=15 ;;
+  *[lcm]*) help_left+=14 ;;
+  *f*) help_left+=12 ;;
+  *[bxs]*) help_left+=11 ;;
+  *[tku]*) help_left+=10 ;;
   *o*) help_left+=8 ;;
   *) help_left+=6 ;;
   esac
@@ -1394,78 +1528,87 @@ help() {
   echo "$description"
   echo1 "${BU}Usage:$N $REMUXER $B$cmd$N [OPTIONS] ${b:+"--base-input <BASE-INPUT> "}[INPUT${t:+"..."}]"
   echo1 "${BU}Arguments:$N"
-  help0 "INPUT                         Input file path"
+  help0 "INPUT                           Input file path"
   echo1 "${BU}Options:$N"
-  help0 "-i, --input <INPUT>           Input file${t:+"/dir"} path${t:+" [can be used multiple times]"}
-                                       ${t:+"For dirs, all supported files within will be used"}
-                                       [supported formats: $B$formats$N]"
-  help1 "-b, --base-input <INPUT>      Base input file path [${B}required$N]
-                                       [supported formats: $B$formats$N]"
-  help1 "-x, --formats <F1,...,FN>     Filter files by format in dir inputs
-                                       [allowed values: $B${formats//./}$N]"
-  help1 "-t, --input-type <TYPE>       Filter files by type in dir inputs
-                                       Allowed values:
-                                       $B- shows:$N  files with ${B}S01E01$N-like pattern in name
-                                       $B- movies:$N non-show files"
-  help1 "-o, --output <OUTPUT>         Output file path [default: $B$default_output$N]
-                                       $output_info"
-  help1 "-e, --output-format <FORMAT>  Output format [default: $B$default_output_format$N]
-                                       [allowed values: $B$(cmd_output_formats "$cmd")$N]"
-  help1 "-u, --frames <F1,...,FN>      Print RPU info for given frames"
-  help1 "-k, --time [<T1,...TN>]       Approx. frame timestamp(s) in ${B}[[HH:]MM:]SS$N format
-                                       [default: based on video duration (max. 3 frames)]"
-  help1 "-s, --sample [<SECONDS>]      Process only the first N seconds of input
-                                       [default sample duration: $B${EXTRACT_SHORT_SEC}s$N]
-                                       ${bin:+"[ignored for $B.bin$N inputs]"}"
-  help1 "-q, --skip-sync               Skip RPUs sync (assumes RPUs are already in sync)"
-  help1 "-f, --frame-shift <SHIFT>     Frame shift value [default: ${B}auto-calculated$N]
-                                       ${q:+"[ignored when $B--skip-sync$N]"}"
-  help1 "-l, --rpu-levels <L1,...,LN>  RPU levels to inject [default: $B$RPU_LEVELS$N]
-                                       [allowed values: ${B}1-6, 8-11, 254, 255$N]
-                                       [ignored when $B--raw-rpu$N]"
-  help1 "-w, --raw-rpu                 Inject input RPU instead of transferring levels"
-  help1 "-n, --info <0|1>              Controls intermediate info commands [default: $B$INFO_INTERMEDIATE$N]"
-  help1 "-p, --plot <0|1>              Controls L1 plotting in info command${p:+" [default: $B$INFO_L1_PLOT$N]"}
-                                       ${s:+"[default: $B$INFO_L1_PLOT$N (${B}0$N if $B--sample$N$default_plot_info is used)]"}"
-  help1 "-c, --lang-codes <C1,...,CN>  ISO 639-2 lang codes of subtitle tracks to extract
-                                       [default: $B${SUBS_LANG_CODES:-all}$N; example value: 'eng,pol']"
-  clean="-m, --clean-filenames <0|1>   Controls output filename cleanup [default: $B$CLEAN_FILENAMES$N]
-                                       [ignored if $B--output$N is set]
-                                       [e.g., 'The.Show.S01E01.HDR' → 'The Show S01E01']
-                                       [e.g., 'A.Movie.2025.UHD.2160p.DV' → 'A Movie']"
+  help0 "-i, --input <INPUT>             Input file${t:+"/dir"} path${t:+" [can be used multiple times]"}
+                                         ${t:+"For dirs, all supported files within will be used"}
+                                         [supported formats: $B$formats$N]"
+  help1 "-b, --base-input <INPUT>        Base input file path [${B}required$N]
+                                         [supported formats: $B$formats$N]"
+  help1 "-x, --formats <F1[,...]>        Filter files by format in dir inputs
+                                         [allowed values: $B${formats//./}$N]"
+  help1 "-t, --input-type <TYPE>         Filter files by type in dir inputs
+                                         Allowed values:
+                                         $B- shows:$N  files with ${B}S01E01$N-like pattern in name
+                                         $B- movies:$N non-show files"
+  help1 "-o, --output <OUTPUT>           Output file path [default: $B$default_output$N]
+                                         $output_info"
+  help1 "-e, --output-format <FORMAT>    Output format [default: $B$default_output_format$N]
+                                         [allowed values: $B$(cmd_output_formats "$cmd")$N]"
+  help1 "-u, --frames <F1[,...]>         Print RPU info for given frames"
+  help1 "-k, --time [<T1[,...]>]         Approx. frame timestamp(s) in ${B}[[HH:]MM:]SS$N format
+                                         [default: based on video duration (max. 3 frames)]"
+  help1 "-s, --sample [<SECONDS>]        Process only the first N seconds of input
+                                         [default sample duration: $B${EXTRACT_SHORT_SEC}s$N]
+                                         ${bin:+"[ignored for $B.bin$N inputs]"}"
+  help1 "-q, --skip-sync                 Skip RPUs sync (assumes RPUs are already in sync)"
+  help1 "-f, --frame-shift <SHIFT>       Frame shift value [default: ${B}auto-calculated$N]
+                                         ${q:+"[ignored when $B--skip-sync$N]"}"
+  help1 "-l, --rpu-levels <L1[,...]>     RPU levels to inject [default: $B$RPU_LEVELS$N]
+                                         [allowed values: ${B}1-6, 8-11, 254, 255$N]
+                                         [ignored when $B--raw-rpu$N]"
+  help1 "-w, --raw-rpu                   Inject input RPU instead of transferring levels"
+  help1 'F' "--l5 <T,B[,L,R]>            Set Dolby Vision L5 active area offsets
+                                         [defaults: ${B}L=0, R=0$N]
+                                         <Top, Bottom, Left, Right>"
+  help1 'F' "--cuts-clear <FS-FE[,...]>  Clear scene-cut flag in specified frame ranges"
+  help1 'F' "--cuts-first <0|1>          Force first frame as scene-cut [default: $B$FIX_CUTS_FIRST$N]"
+  help1 'F' "--cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: $B$FIX_CUTS_CONSEC$N]"
+  help1 "-j, --json <FILE>               JSON config file path (applied before auto-fixes)
+                                         Use $B--json-examples$N for samples"
+  help1 'j' "--json-examples             Show examples for $B--json$N option"
+  help1 "-n, --info <0|1>                Controls intermediate info commands [default: $B$INFO_INTERMEDIATE$N]"
+  help1 "-p, --plot <0|1>                Controls L1 plotting in info command${p:+" [default: $B$INFO_L1_PLOT$N]"}
+                                         ${s:+"[default: $B$INFO_L1_PLOT$N (${B}0$N if $B--sample$N$default_plot_info is used)]"}"
+  help1 "-c, --lang-codes <C1[,...]>     ISO 639-2 lang codes of subtitle tracks to extract
+                                         [default: $B${SUBS_LANG_CODES:-all}$N; example value: 'eng,pol']"
+  clean="-m, --clean-filenames <0|1>     Controls output filename cleanup [default: $B$CLEAN_FILENAMES$N]
+                                         [ignored if $B--output$N is set]
+                                         [e.g., 'The.Show.S01E01.HDR' → 'The Show S01E01']
+                                         [e.g., 'A.Movie.2025.UHD.2160p.DV' → 'A Movie']"
   [[ "$cmd" != inject && "$cmd" != remux ]] && help1 "$clean"
-  help1 "    --out-dir <DIR>           Output files dir path
-                                       [default: '$B$(help_dir "$OUT_DIR")$N']"
-  help1 "    --tmp-dir <DIR>           Temp files dir path [will be ${B}removed if created$N]
-                                       [default: '$B$(help_dir "$TMP_DIR")$N']"
-  help1 "-h, --help                    Show help (use '$B--help$N' for a detailed version)"
+  help1 "    --out-dir <DIR>             Output files dir path
+                                         [default: '$B$(help_dir "$OUT_DIR")$N']"
+  help1 "    --tmp-dir <DIR>             Temp files dir path [will be ${B}removed if created$N]
+                                         [default: '$B$(help_dir "$TMP_DIR")$N']"
+  help1 "-h, --help                      Show help (use '$B--help$N' for a detailed version)"
 
   [[ "$cmd" != inject && "$cmd" != remux ]] && return
   echo1 "${BU}Options for .mkv / .mp4 output:$N"
-  help0 "    --subs <FILE>             $B.srt$N subtitle file path to include
-                                       $multiple_inputs"
-  help1 "    --find-subs <0|1>         Controls subtitles auto-detection [default: $B$SUBS_AUTODETECTION$N]
-                                       If ${B}1$N, searches for matching subs within input's dir"
-  help1 "    --copy-subs <OPTION>      Controls input subtitle tracks to copy [default: $B$SUBS_COPY_MODE$N]
-                                       Allowed values:
-                                       $B- 0:$N     none
-                                       $B- 1:$N     all
-                                       $B- <lng>:$N based on ISO 639-2 lang code [e.g., eng]"
-  help1 "    --copy-audio <OPTION>     Controls input audio tracks to copy [default: $B$AUDIO_COPY_MODE$N]
-                                       Allowed values:
-                                       $B- 1:$N 1st track only
-                                       $B- 2:$N 1st track + compatibility if 1st is TrueHD
-                                       $B- 3:$N all"
-  help1 "-r, --hevc <FILE>             $B.hevc$N file path to replace input video track
-                                       $multiple_inputs"
-  help1 "    --title <TITLE>           Metadata title (e.g., movie name)
-                                       $multiple_inputs"
-  help1 "    --auto-title <0|1>        Controls generation of metadata title
-                                       If ${B}1$N, metadata title will match clean filename
-                                       [default - shows: $B$TITLE_SHOWS_AUTO$N, movies: $B$TITLE_MOVIES_AUTO$N]
-                                       [ignored if $B--title$N is set]"
-  help1 "    --auto-tracks <0|1>       Controls generation of some track names [default: $B$TRACK_NAMES_AUTO$N]
-                                       [e.g., audio: TrueHD Atmos 7.1, subs: Polish]"
+  help0 "    --subs <FILE>               $B.srt$N subtitle file path to include
+                                         $multiple_inputs"
+  help1 "    --find-subs <0|1>           Controls subtitles auto-detection [default: $B$SUBS_AUTODETECTION$N]
+                                         If ${B}1$N, searches for matching subs within input's dir"
+  help1 "    --copy-subs <OPTION>        Controls input subtitle tracks to copy [default: $B$SUBS_COPY_MODE$N]
+                                         Allowed values:
+                                         $B- 0:$N     none
+                                         $B- 1:$N     all
+                                         $B- <lng>:$N based on ISO 639-2 lang code [e.g., eng]"
+  help1 "    --copy-audio <OPTION>       Controls input audio tracks to copy [default: $B$AUDIO_COPY_MODE$N]
+                                         Allowed values:
+                                         $B- 1:$N 1st track only
+                                         $B- 2:$N 1st track + compatibility if 1st is TrueHD
+                                         $B- 3:$N all"
+  help1 "-r, --hevc <FILE>               $B.hevc$N file path to replace input video track
+                                         $multiple_inputs"
+  help1 "    --title <TITLE>             Metadata title (e.g., movie name)
+                                         $multiple_inputs"
+  help1 "    --auto-title <0|1>          Controls generation of metadata title
+                                         If ${B}1$N, metadata title will match clean filename
+                                         [default - shows: $B$TITLE_SHOWS_AUTO$N, movies: $B$TITLE_MOVIES_AUTO$N]
+                                         [ignored if $B--title$N is set]"
+  help1 "    --auto-tracks <0|1>         Controls generation of some track names [default: $B$TRACK_NAMES_AUTO$N]
+                                         [e.g., audio: TrueHD Atmos 7.1, subs: Polish]"
   help1 "$clean"
 }
 
@@ -1486,7 +1629,7 @@ show_help() {
   echo "CLI tool for processing DV videos, with a focus on CMv4.0 + P7 CMv2.9 hybrid creation"
   echo1 "${BU}Usage:$N $REMUXER [OPTIONS] <COMMAND>"
   echo1 "${BU}Commands:$N"
-  for cmd in info plot frame-shift sync inject remux extract cuts subs png mp3; do
+  for cmd in info plot frame-shift sync fix inject remux extract cuts subs png mp3; do
     help0 "$cmd            $(cmd_info "$cmd")"
   done
   echo1 "${BU}Options:$N"
@@ -1572,13 +1715,14 @@ parse_dir() {
 }
 
 parse_option() {
-  local value="${1// /}" current="$2" cmd="$3" option="$4" required="$5" allowed_values="$6" regex="$7" splittable="$8" result
+  local value="${1// /}" current="$2" cmd="$3" option="$4" required="$5" allowed_values="$6" regex="$7" splittable="$8" required_items="$9" result
+  local -i i=0
 
   option_valid "$value" "$current" "$cmd" "$option" "$required" || return
   [ "$splittable" = 1 ] && value=${value//,/ }
 
   for v in $value; do
-    result+="$v,"
+    result+="$v," && i+=1
     if [[ -n "$regex" ]]; then
       [[ "$v" =~ ^$regex$ ]] && continue
     else
@@ -1586,6 +1730,8 @@ parse_option() {
     fi
     option_fatal "$option" "'$v' is not a valid value (allowed: $allowed_values)"
   done
+
+  [[ -n "$required_items" && ! "$i" =~ ^$required_items$ ]] && option_fatal "$option" "must contain ${required_items//|/ or } items (found $i: '${result%,}')"
 
   echo "${result%,}"
 }
@@ -1660,12 +1806,13 @@ parse_args() {
   [[ $# -eq 0 ]] && show_help "$cmd" 1 && return
 
   local allowed_formats=$(cmd_info "$cmd" 3)
-  local -i batch=0 sample=0 skip_sync=0 rpu_raw=0
+  local -i batch=0 sample=0 skip_sync=0 rpu_raw=0 json_examples=0
 
   [[ "$cmd_options" == *t* ]] && batch=1
 
   local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir sample_duration
   local frames frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto timestamps
+  local l5 cuts_clear cuts_first cuts_consecutive json
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1680,12 +1827,13 @@ parse_args() {
       fi
       sample_duration=$(parse_option "$2" "$sample_duration" "$cmd" "$1" 's' '<seconds>' '[1-9][0-9]*')
       ;;
+    --json-examples) json_examples=1 && output=''; shift; continue ;;
     -x | --formats)                 formats=$(parse_option "$2" "$formats" "$cmd" "$1" 'x' "${allowed_formats//./}" '' 1) ;;
     -t | --input-type)           input_type=$(parse_option "$2" "$input_type" "$cmd" "$1" 't' 'shows, movies') ;;
     -o | --output)                   output=$(parse_file "$2" "$output" "$cmd" "$1" 'o' '' 0) ;;
     -e | --output-format)     output_format=$(parse_option "$2" "$output_format" "$cmd" "$1" 'e' "$(cmd_output_formats "$cmd")") ;;
     -f | --frame-shift)         frame_shift=$(parse_option "$2" "$frame_shift" "$cmd" "$1" 'f' '<number>' '-?[0-9]+') ;;
-    -u | --frames)                   frames=$(parse_option "$2" "$frames" "$cmd" "$1" 'u' '<frame-numbers>' '(0|[1-9][0-9]*)' 1) ;;
+    -u | --frames)                   frames=$(parse_option "$2" "$frames" "$cmd" "$1" 'u' '<frame-number>' '(0|[1-9][0-9]*)' 1) ;;
     -k | --time)                 timestamps=$(parse_option "$2" "$timestamps" "$cmd" "$1" 'k' '[[HH:]MM:]SS' '((([0-5]?[0-9]:){1,2}[0-5]?[0-9])|[0-9]+)' 1) ;;
     -l | --rpu-levels)           rpu_levels=$(parse_option "$2" "$rpu_levels" "$cmd" "$1" 'l' '1-6, 8-11, 254, 255' '([1-689]|1[01]|25[45])' 1) ;;
     -n | --info)                       info=$(parse_option "$2" "$info" "$cmd" "$1" 'n' '0, 1') ;;
@@ -1693,6 +1841,11 @@ parse_args() {
     -c | --lang-codes)           lang_codes=$(parse_option "$2" "$lang_codes" "$cmd" "$1" 'c' '<ISO 639-2 lang codes>' '[a-z]{3}' 1) ;;
     -m | --clean-filenames) clean_filenames=$(parse_option "$2" "$clean_filenames" "$cmd" "$1" 'm' '0, 1') ;;
     -r | --hevc)                       hevc=$(parse_file "$2" "$hevc" "$cmd" "$1" 'r' '.hevc') ;;
+    --l5)                                l5=$(parse_option "$2" "$l5" "$cmd" "$1" 'F' '<offset>' '[0-9]+' 1 '2|4') ;;
+    --cuts-clear)                cuts_clear=$(parse_option "$2" "$cuts_clear" "$cmd" "$1" 'F' '<frame-range>' '[0-9]+(-[0-9]+)?' 1) ;;
+    --cuts-first)                cuts_first=$(parse_option "$2" "$cuts_first" "$cmd" "$1" 'F' '0, 1') ;;
+    --cuts-consecutive)    cuts_consecutive=$(parse_option "$2" "$cuts_consecutive" "$cmd" "$1" 'F' '0, 1') ;;
+    --json)                            json=$(parse_file "$2" "$json" "$cmd" "$1" 'F' '.json') ;;
     --subs)                            subs=$(parse_file "$2" "$subs" "$cmd" "$1" 'e' '.srt') ;;
     --find-subs)                  find_subs=$(parse_option "$2" "$find_subs" "$cmd" "$1" 'e' '0, 1') ;;
     --copy-subs)                  copy_subs=$(parse_option "$2" "$copy_subs" "$cmd" "$1" 'e' '0, 1, <ISO 639-2 lang code>' '(0|1|[a-z]{3})') ;;
@@ -1708,6 +1861,8 @@ parse_args() {
     esac
     shift; shift
   done
+
+  [ "$json_examples" = 1 ] && fix_rpu_examples "$output" && return
 
   [ ${#inputs[@]} -eq 0 ] && log_kill "No input specified (use '$B--input/-i$N' or ${B}positional argument$N)" 2 1
   [[ "$cmd_options" == *b* && -z "$base_input" ]] && log_kill "Required option '$B--base-input/-b$N' is missing" 2 1
@@ -1733,8 +1888,10 @@ parse_args() {
   [[ -n "$tmp_dir" ]] && TMP_DIR="$tmp_dir"
   [[ -n "$sample_duration" ]] && EXTRACT_SHORT_SEC="$sample_duration"
   [[ -n "$rpu_levels" ]] && RPU_LEVELS=$(deduplicate_list "$rpu_levels" 1)
-  [[ -n "$plot" ]] && INFO_L1_PLOT="$plot" && OPTIONS_PLOT_SET=1
   [[ -n "$info" ]] && INFO_INTERMEDIATE="$info"
+  [[ -n "$plot" ]] && INFO_L1_PLOT="$plot" && OPTIONS_PLOT_SET=1
+  [[ -n "$cuts_first" ]] && FIX_CUTS_FIRST="$cuts_first"
+  [[ -n "$cuts_consecutive" ]] && FIX_CUTS_CONSEC="$cuts_consecutive"
   [[ -n "$find_subs" ]] && SUBS_AUTODETECTION="$find_subs"
   [[ -n "$copy_subs" ]] && SUBS_COPY_MODE="$copy_subs"
   [[ -n "$lang_codes" ]] && SUBS_LANG_CODES=$(deduplicate_list "$lang_codes")
@@ -1753,6 +1910,7 @@ parse_args() {
     plot) plot_l1 "$input" "$sample" 0 "$output" ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
+    fix) fix_rpu "$input" "$l5" "$cuts_clear" "$json" "$output" 0 >/dev/null ;;
     inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$output_format" "$output" "$subs" "$title" ;;
     remux) remux "$input" "$output_format" "$output" "$hevc" "$subs" "$title" ;;
     extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
