@@ -861,14 +861,14 @@ fix_rpu_raw() {
 }
 
 fix_rpu() {
-  local input="$1" l5="$2" cuts_clear="$3" json="$4" output="$5" quiet="${6:-1}" rpu rpu_name config
-  rpu=$(to_rpu "$input" 0 "$quiet") && rpu_name=$(basename "$rpu")
-  output=$(out_file "$rpu" "bin" 'FIXED' "$output")
+  local input="$1" l5="$2" cuts_clear="$3" json="$4" quiet="${5:-1}" output="$6" input_rpu rpu rpu_name config plot
+  input_rpu=$(to_rpu "$input" 0 "$quiet") && rpu_name=$(basename "$input_rpu")
+  output=$(out_file "$input_rpu" "bin" 'FIXED' "$output")
 
   log_t "Fixing RPU: '%s' ..." "$rpu_name"
   [[ -e "$output" ]] && logf "Fixed RPU file '%s' already exists, skipping..." "$output" && echo "$output" && return
 
-  rpu=$(fix_rpu_raw "$rpu" "$json")
+  rpu=$(fix_rpu_raw "$input_rpu" "$json")
 
   config="$(fix_rpu_cuts "$rpu" "$cuts_clear" "$json" "$quiet")"
   [ -n "$config" ] && config=$(printf '"scene_cuts": { %s },' "${config%%,}" )
@@ -890,6 +890,14 @@ fix_rpu() {
   fi
 
   log_t "RPU: '%s' fixed successfully - output: '%s'" "$rpu_name" "$(basename "$output")"
+
+  if [[ "$quiet" != 1 && "$INFO_INTERMEDIATE" = 1 ]]; then
+    plot="$INFO_L1_PLOT" && INFO_L1_PLOT=0
+    info "$input_rpu" >&2
+    info "$output" >&2
+    INFO_L1_PLOT="$plot"
+  fi
+
   echo "$output"
 }
 
@@ -1116,7 +1124,7 @@ inject_rpu() {
   fi
 
   if [ "$fix" = 1 ]; then
-    rpu_fixed=$(fix_rpu "$rpu_injected" "$l5" "$cuts_clear" "" "$output" 1)
+    rpu_fixed=$(fix_rpu "$rpu_injected" "$l5" "$cuts_clear" "" 1 "$output")
     [[ ! "$rpu_fixed" -ef "$output" ]] && cp "$rpu_fixed" "$output"
   fi
 
@@ -1148,7 +1156,7 @@ inject_hevc() {
       rpu_injected=$(to_rpu "$input")
     fi
 
-    [ "$fix" = 1 ] && rpu_injected=$(fix_rpu "$rpu_injected" "$l5" "$cuts_clear" "" "" 1)
+    [ "$fix" = 1 ] && rpu_injected=$(fix_rpu "$rpu_injected" "$l5" "$cuts_clear" "" 1)
 
     local -r hevc=$(to_hevc "$input_base") base_name=$(basename "$input_base")
 
@@ -1928,7 +1936,7 @@ parse_args() {
     plot) plot_l1 "$input" "$sample" 0 "$output" ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
-    fix) fix_rpu "$input" "$l5" "$cuts_clear" "$json" "$output" 0 >/dev/null ;;
+    fix) fix_rpu "$input" "$l5" "$cuts_clear" "$json" 0 "$output" >/dev/null ;;
     inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$l5" "$cuts_clear" "$output_format" "$output" "$subs" "$title" ;;
     remux) remux "$input" "$output_format" "$output" "$hevc" "$subs" "$title" ;;
     extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
