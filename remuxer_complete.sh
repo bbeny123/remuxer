@@ -1,9 +1,18 @@
 #!/bin/bash
 
 _remuxer_complete_path() {
-  local cur="$1" type="${2:-"-f"}"
+  local cur="$1" type_or_formats="$2" dirs=()
 
-  mapfile -t COMPREPLY < <(compgen "$type" -- "$cur")
+  if [ "$type_or_formats" = "-f" ]; then
+    mapfile -t COMPREPLY < <(compgen -f -- "$cur")
+  elif [ "$type_or_formats" = "-d" ]; then
+    mapfile -t COMPREPLY < <(compgen -d -- "$cur")
+  else
+    mapfile -t COMPREPLY < <(compgen -f -- "$cur" | grep -iE "\.(${type_or_formats// /|})$")
+    mapfile -t dirs < <(compgen -d -- "$cur")
+    COMPREPLY+=("${dirs[@]}")
+  fi
+
   compopt -o filenames
 
   return 0
@@ -28,8 +37,16 @@ _remuxer_complete() {
   esac
 
   case "$prev" in
-  -[iborj] | --input | --base-input | --output | --hevc | --subs | --json)
-    _remuxer_complete_path "$cur" && return ;;
+  -[ib] | --input | --base-input)
+    _remuxer_complete_path "$cur" "$formats" && return ;;
+  -r | --hevc)
+    _remuxer_complete_path "$cur" "hevc" && return ;;
+  -j | --json)
+    _remuxer_complete_path "$cur" "json" && return ;;
+  --subs)
+    _remuxer_complete_path "$cur" "srt" && return ;;
+  -o | --output)
+    _remuxer_complete_path "$cur" "-f" && return ;;
   --out-dir | --tmp-dir)
     _remuxer_complete_path "$cur" '-d' && return ;;
   -x | --formats) values="$formats" ;;
@@ -49,7 +66,7 @@ _remuxer_complete() {
   fi
 
   if [[ "$COMP_CWORD" -gt 1 && -n "$cur" && "$cur" != -* ]]; then
-    _remuxer_complete_path "$cur" && return
+    _remuxer_complete_path "$cur" "$formats" && return
   fi
 
   case "$cmd" in
