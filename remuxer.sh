@@ -320,7 +320,6 @@ to_rpu() {
     ffmpeg_cmd+=(-t "$EXTRACT_SHORT_SEC")
     type+=" sample"
   else
-    short_sample=''
     output=$(out_file "$input" 'bin' 'RPU' "$output")
   fi
 
@@ -329,7 +328,7 @@ to_rpu() {
   if [[ ! -f "$output" ]]; then
     [ "$quiet" = 1 ] && log "Extracting $type for: '$input_name' ..." 1
 
-    if [[ -z "$short_cmd" ]] && check_extension "$input" ".hevc"; then
+    if [ "$short_sample" != 1 ] && check_extension "$input" ".hevc"; then
       dovi_tool extract-rpu -o "$output" "$input" >/dev/null
     else
       if ! ffmpeg -i "$input" -map 0:0 -c copy "${ffmpeg_cmd[@]}" -f hevc - | dovi_tool extract-rpu -o "$output" - >/dev/null; then
