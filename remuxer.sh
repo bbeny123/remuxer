@@ -1153,9 +1153,14 @@ inject_hevc() {
     else
       log "Skipping raw RPU sync..." 1
       rpu_injected=$(to_rpu "$input")
+      [ "$INFO_INTERMEDIATE" = 1 ] && info "$rpu_injected" >&2
     fi
 
-    [ "$fix" = 1 ] && rpu_injected=$(fix_rpu "$rpu_injected" "$l5" "$cuts_clear" "" 1)
+    if [ "$fix" = 1 ]; then
+      local -r rpu_fixed=$(fix_rpu "$rpu_injected" "$l5" "$cuts_clear" "" 1)
+      [[ "$INFO_INTERMEDIATE" = 1 && ! "$rpu_fixed" -ef "$rpu_injected" ]] && info "$rpu_fixed" >&2
+      rpu_injected="$rpu_fixed"
+    fi
 
     local -r hevc=$(to_hevc "$input_base") base_name=$(basename "$input_base")
 
