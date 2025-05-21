@@ -223,29 +223,6 @@ out_hybrid() {
   out_file "$input_base" "$ext" "HYBRID$prefix-$input_name" "$output"
 }
 
-rpu_export_file() {
-  local dir="$1" input="$2" short_sample="$3" ext="$4" prefix="$5" output="$6" out_dir="$7"
-
-  if [ "$short_sample" = 1 ]; then
-    prefix+="-${EXTRACT_SHORT_SEC}s"
-    [ "$out_dir" != 1 ] && dir="$TMP_DIR"
-  fi
-
-  generate_file "$dir" "$input" "$ext" "$prefix" "$output"
-}
-
-rpu_cuts_file() {
-  local -r input="$1" short_sample="$2" out_dir="$3" output="$4"
-
-  rpu_export_file "$OUT_DIR" "$input" "$short_sample" 'txt' "CUTS" "$output" "$out_dir"
-}
-
-rpu_l5_file() {
-  local -r input="$1" short_sample="$2" output="$3"
-
-  rpu_export_file "$TMP_DIR" "$input" "$short_sample" 'json' "L5" "$output"
-}
-
 file_exists() {
   local -r file="$1" var_name="$2" error_if_empty="$3"
 
@@ -263,14 +240,24 @@ dovi_input() {
   ! dovi_tool info -s "$input" 2>&1 | grep -q 'No RPU found'
 }
 
-cm4_input() {
+cm40_input() {
   local -r input=$(to_rpu "$1" 0 1)
   dovi_tool info -s "$input" | grep -q 'CM v4.0'
+}
+
+cm29_input() {
+  local -r input=$(to_rpu "$1" 0 1)
+  dovi_tool info -s "$input" | grep -q 'CM v2.9'
 }
 
 p7_input() {
   local -r input=$(to_rpu "$1" "$2" 1)
   dovi_tool info -s "$input" | grep -q 'Profile: 7'
+}
+
+rpu_frames() {
+  local input=$(to_rpu "$1" 0 1)
+  dovi_tool info -s "$input" | grep -oE 'Frames:\s*[0-9]+' | grep -oE '[0-9]+'
 }
 
 to_hevc() {
@@ -346,28 +333,6 @@ to_rpu() {
   echo "$output"
 }
 
-to_cm4_rpu() {
-  local input="$1" output="$2"
-  input=$(to_rpu "$input" 0 1)
-
-  if ! cm4_input "$input"; then
-    local -r input_name=$(basename "$input")
-    log "Converting '$input_name' to CM v4.0..."
-
-    local -r convert_config=$(tmp_file "$input" 'json' 'EDITOR-CONVERT')
-    [[ ! -f "$convert_config" ]] && echo '{ "convert_to_cmv4": true }' >"$convert_config"
-
-    output=$(tmp_file "$input" 'bin' 'CMv4' "$output")
-    [[ ! -f "$output" ]] && log "" && dovi_tool_cmv4 editor -i "$input" -j "$convert_config" -o "$output" >&2
-
-    log ""
-    log "'$input_name' converted to CM v4.0 - output file: '$output'" 2
-    echo "$output"
-  else
-    echo "$input"
-  fi
-}
-
 extract() {
   local input="$1" short_sample="$2" output_format="$3" output="$4"
   [[ -z "$output_format" && "$output" == *.* ]] && output_format="${output##*.}"
@@ -379,43 +344,8 @@ extract() {
   fi
 }
 
-to_rpu_json() {
-  local input="$1" short_sample="$2" quick="$3" cuts_output="$4" l5_output="$5" output="$6" prefix=""
-  [ "$quick" = 1 ] && prefix+="FRAME_24" || prefix+="ALL"
-  [ "$short_sample" = 1 ] && prefix+="-${EXTRACT_SHORT_SEC}s"
-
-  input=$(to_rpu "$input" "$short_sample" 1)
-  output=$(tmp_file "$input" 'json' "$prefix" "$output")
-
-  if [[ ! -f "$output" ]]; then
-    cuts_output=$(rpu_cuts_file "$input" "$short_sample" 0 "$cuts_output")
-    l5_output=$(rpu_l5_file "$input" "$short_sample" "$l5_output")
-    if [ "$quick" = 1 ]; then
-      dovi_tool info -i "$input" -f 24 >"$output"
-      dovi_tool export -i "$input" --data scenes="$cuts_output" --data level5="$l5_output" >/dev/null
-    else
-      dovi_tool export -i "$input" --data all="$output" --data scenes="$cuts_output" --data level5="$l5_output" >/dev/null
-    fi
-  fi
-
-  echo "$output"
-}
-
-to_rpu_l5() {
-  local input="$1" short_sample="$2" output="$3"
-
-  input=$(to_rpu "$input" "$short_sample" 1)
-  output=$(rpu_l5_file "$input" "$short_sample" "$output")
-
-  if [[ ! -f "$output" ]]; then
-    dovi_tool export -i "$input" --data level5="$output" >/dev/null
-  fi
-
-  echo "$output"
-}
-
 to_rpu_cuts() {
-  local input="$1" short_sample="$2" quiet="${3:-$2}" output="$4" direct="$5"
+  local input="$1" short_sample="$2" quiet="${3:-$2}" output="$4" direct="$5" prefix="CUTS" dir
 
   if check_extension "$input" ".txt"; then
     file_exists "$input" 'input' 1
@@ -427,7 +357,12 @@ to_rpu_cuts() {
 
   local -r input_name=$(basename "$input")
   input=$(to_rpu "$input" "$short_sample" "$quiet")
-  output=$(rpu_cuts_file "$input" "$short_sample" "$direct" "$output")
+
+  if [ "$short_sample" = 1 ]; then
+    prefix+="-${EXTRACT_SHORT_SEC}s"
+    [ "$direct" != 1 ] && dir="$TMP_DIR"
+  fi
+  output=$(generate_file "${dir:-"$OUT_DIR"}" "$input" 'txt' "$prefix" "$output")
 
   [ "$quiet" != 1 ] && log "Extracting scene-cuts for: '$input_name' ..." 1
 
@@ -440,12 +375,6 @@ to_rpu_cuts() {
   fi
 
   echo "$output"
-}
-
-rpu_frames() {
-  local input=$(to_rpu "$1" 0 1)
-
-  dovi_tool info -s "$input" | grep -oE 'Frames:\s*[0-9]+' | grep -oE '[0-9]+'
 }
 
 cut_frame() {
@@ -581,78 +510,30 @@ rpu_info_cuts() {
   [[ "$cut1" != '0' ]] && red 'NO' || echo 'YES (good)'
 }
 
-rpu_info_l5() {
-  local -r rpu_l5="$1" edge="$2"
-
-  local -r edge_offsets=$(grep "$edge" "$rpu_l5" | grep -oE "[0-9]+" | sort -nu)
-  [ -z "$edge_offsets" ] && yellow 'N/A' && return
-
-  local -r offset_min=$(head -n1 <<<"$edge_offsets") offset_max=$(tail -n1 <<<"$edge_offsets")
-  if [ "$offset_min" = "$offset_max" ]; then
-    [[ "$offset_min" = '0' && "$edge" != 'left' && "$edge" != 'right' ]] && yellow 0 || echo "$offset_min"
-  else
-    echo "($offset_min - $offset_max)"
-  fi
-}
-
-rpu_info_cm4() {
-  local rpu_json="$1" short_sample="$2" quick="$3" l8_info l8_tdis l9_spis
-
-  ! grep -q 'cmv40' "$rpu_json" && return
-
-  if [ "$quick" != 1 ]; then
-    rpu_json=$(to_rpu_json "$input" "$short_sample" 0)
-    local -r rpu_info=$(grep -oE '("target_display_index":[124][4578]?)|("source_primary_index":[02])' "$rpu_json" | sort -u)
-    l8_tdis=$(echo "$rpu_info" | grep 'target_display_index')
-    l9_spis=$(echo "$rpu_info" | grep 'source_primary_index')
-  else
-    l8_tdis=$(grep 'target_display_index' "$rpu_json")
-    l9_spis=$(grep 'source_primary_index' "$rpu_json")
-  fi
-
-  [[ "$l8_tdis" =~ :\ ?1 ]] && l8_info="100 nits"
-  [[ "$l8_tdis" =~ :\ ?2[45] ]] && l8_info+=", 300 nits"
-  [[ "$l8_tdis" =~ :\ ?2[78] ]] && l8_info+=", 600 nits"
-  [[ "$l8_tdis" =~ :\ ?4 ]] && l8_info+=", 1000 nits"
-  echo "${l8_info#, }"
-
-  case "$l9_spis" in
-  *2*) echo 'BT2020' ;;
-  *0*) echo 'P3' ;;
-  esac
-}
-
 printf_info() {
   printf_safe "  $1\n" "${@:2}"
 }
 
 info_summary() {
-  local input="$1" short_sample="$2" quick="$3" rpu rpu_json rpu_l5 suffix rpu_cuts
-  local dv_profile base_layer resolution lossless_audio l5_top l5_bottom l5_left l5_right l8_trims l9_mdp cuts_zero cuts_cons cuts_end_cons
+  local input="$1" short_sample="$2" summary dv_profile base_layer resolution lossless_audio cuts_zero cuts_cons cuts_end_cons
+  local -r rpu=$(to_rpu "$input" "$short_sample")
 
-  rpu=$(to_rpu "$input" "$short_sample")
-  rpu_json=$(to_rpu_json "$rpu" "$short_sample" 1)
+  summary=$(dovi_tool_cmv4 info -s "$rpu" | grep -E '^ ')
+  summary=${summary//"TOP: 0"/"TOP: $(yellow 0)"}
+  summary=${summary//"BOTTOM: 0"/"BOTTOM: $(yellow 0)"}
+  summary=${summary//"N/A"/"$(yellow 'N/A')"}
 
-  dv_profile=$(grep 'dovi_profile' "$rpu_json" | grep -oE '[0-9]+')
+  dv_profile=$(echo "$summary" | grep 'Profile' | grep -oE '[0-9]+')
   IFS='|' read -r base_layer resolution lossless_audio < <(video_info "$input" "$dv_profile")
 
-  { read -r l8_trims; read -r l9_mdp; } < <(rpu_info_cm4 "$rpu_json" "$short_sample" "$quick")
-
-  rpu_l5=$(to_rpu_l5 "$rpu" "$short_sample")
-  l5_top=$(rpu_info_l5 "$rpu_l5" 'top'); l5_bottom=$(rpu_info_l5 "$rpu_l5" 'bottom')
-  l5_left=$(rpu_info_l5 "$rpu_l5" 'left'); l5_right=$(rpu_info_l5 "$rpu_l5" 'right')
-
-  rpu_cuts=$(to_rpu_cuts "$rpu" "$short_sample" 1)
+  local -r rpu_cuts=$(to_rpu_cuts "$rpu" "$short_sample" 1)
   { read -r cuts_cons; read -r cuts_zero; } < <(rpu_info_cuts "$rpu_cuts" 1 2 '2nd')
   [ "$short_sample" != 1 ] && read -r cuts_end_cons < <(rpu_info_cuts "$rpu_cuts" -1 -2)
 
   printf "\nRPU Input: %s%s\n" "$(basename "$rpu")" "$(printf_if "$short_sample" " (sample duration: ${EXTRACT_SHORT_SEC}s)")"
 
-  dovi_tool info -s "$rpu" | grep -E '^ '
+  echo "$summary"
 
-  printf_info "L8 trims: %s" "$l8_trims"
-  printf_info "L9 MDP: %s" "$l9_mdp"
-  printf_info "L5 offset: TOP=%s BOTTOM=%s, LEFT=%s, RIGHT=%s" "$l5_top" "$l5_bottom" "$l5_left" "$l5_right"
   printf_info "1st Frame is a Scene Cut: %s" "$cuts_zero"
   printf_info "Consecutive Scene Cuts: %s" "$cuts_cons"
   printf_info "Consecutive Last Scene Cuts: %s" "$cuts_end_cons"
@@ -680,7 +561,7 @@ info_frames() {
 }
 
 info() {
-  local input="$1" short_sample="$2" short_input="$3" quick="${4:-1}" frames="$5" output="$6" batch="$7"
+  local input="$1" short_sample="$2" short_input="$3" frames="$4" output="$5" batch="$6"
   local input_name=$(basename "$input") type='Info' ext='txt'
 
   if ! check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin'; then
@@ -690,7 +571,6 @@ info() {
 
   [[ "$short_sample" = 1 && "$short_input" != 1 ]] && check_extension "$input" '.bin' && short_sample=0
 
-  [ "$quick" = 1 ] && type="Quick info"
   [ -n "$frames" ] && type="Info (frame(s): $frames)" && ext='json'
 
   if [ -n "$output" ]; then
@@ -703,10 +583,10 @@ info() {
   if [ -n "$frames" ]; then
     info_frames "$input" "$short_sample" "$frames" "$output"
   elif [ -n "$output" ]; then
-    info_summary "$input" "$short_sample" "$quick" >"$output"
+    info_summary "$input" "$short_sample" >"$output"
     cat "$output"
   else
-    info_summary "$input" "$short_sample" "$quick"
+    info_summary "$input" "$short_sample"
   fi
 
   [ -n "$output" ] && log_t "%s successfully printed to file: '%s'" "$type" "$output"
@@ -1082,7 +962,7 @@ sync_rpu() {
 
 inject_rpu() {
   local input="$1" input_base="$2" skip_sync="$3" frame_shift="$4" fix="$5" l5="$6" cuts_clear="$7" output="$8" exit_if_exists="$9"
-  local rpu_base rpu_synced rpu_injected rpu_cm4 rpu_fixed
+  local rpu_base rpu_synced rpu_injected rpu_fixed cmv40_transferable
   output=$(out_hybrid "$input" "$input_base" 'bin' "$output" "$fix")
 
   log_t "Creating hybrid RPU: '%s'..." "$(basename "$output")"
@@ -1106,14 +986,14 @@ inject_rpu() {
       log ""
     fi
 
-    cm4_input "$rpu_synced" && rpu_cm4=$(to_cm4_rpu "$rpu_base")
+    cm40_input "$rpu_synced" && cm29_input "$rpu_base" && cmv40_transferable='"allow_cmv4_transfer": true,'
 
-    local -r sync_config=$(tmp_file "$rpu_synced" 'json' 'EDITOR-SYNC')
+    local -r transfer_config=$(tmp_file "$rpu_synced" 'json' 'EDITOR-TRANSFER')
     rpu_synced=$(realpath --relative-to="$(pwd)" "$rpu_synced")
     rpu_synced=$(windows_safe_path "$rpu_synced")
-    echo "{ \"source_rpu\": \"$rpu_synced\", \"rpu_levels\": [$RPU_LEVELS] }" >"$sync_config"
+    echo "{ $cmv40_transferable \"source_rpu\": \"$rpu_synced\", \"rpu_levels\": [$RPU_LEVELS] }" >"$transfer_config"
 
-    if ! dovi_tool editor -i "${rpu_cm4:-"$rpu_base"}" -j "$sync_config" -o "$rpu_injected" >&2; then
+    if ! dovi_tool_cmv4 editor -i "$rpu_base" -j "$transfer_config" -o "$rpu_injected" >&2; then
       log_kill "Error while injecting RPU levels: $RPU_LEVELS of '$(basename "$rpu_synced")' into '$(basename "$rpu_base")'" 1
     fi
 
@@ -1936,7 +1816,7 @@ parse_args() {
 
   for input in "${inputs[@]}"; do
     case "$cmd" in
-    info) info "$input" "$sample" 0 0 "$frames" "$output" "$batch" ;;
+    info) info "$input" "$sample" 0 "$frames" "$output" "$batch" ;;
     plot) plot_l1 "$input" "$sample" 0 "$output" ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
