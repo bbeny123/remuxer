@@ -53,7 +53,8 @@ _remuxer_complete() {
   -e | --output-format) values="$output_formats" ;;
   -t | --input-type) values="shows movies" ;;
   -l | --rpu-levels) values="1 2 3 4 5 6 8 9 10 11 254 255" ;;
-  -[npm] | --info | --plot | --clean-filenames | --find-subs | --auto-title | --auto-tracks | --cuts-first | --cuts-consecutive) values="0 1" ;;
+  -[nm] | --info | --clean-filenames | --find-subs | --auto-title | --auto-tracks | --cuts-first | --cuts-consecutive) values="0 1" ;;
+  -p | --plot) values="0 1 2 3" ;;
   -c | --lang-codes) values="pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-subs) values="0 1 pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-audio) values="1 2 3" ;;
@@ -71,7 +72,7 @@ _remuxer_complete() {
 
   case "$cmd" in
   info) options="--formats --input-type --output --frames --sample --plot" ;;
-  plot) options="--formats --input-type --output --sample" ;;
+  plot) options="--formats --input-type --output --sample --plot" ;;
   frame-shift) options="--base-input" ;;
   sync) options="--base-input --output --frame-shift --info --plot" ;;
   fix) options="--formats --input-type --output --info --l5 --cuts-clear --cuts-first --cuts-consecutive --json --json-examples" ;;

@@ -16,16 +16,14 @@ alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel error" # v7.
 alias mkvmerge="'$TOOLS_DIR/mkvtoolnix/mkvmerge.exe'"                      # v92.0: https://mkvtoolnix.download/downloads.html
 alias mkvextract="'$TOOLS_DIR/mkvtoolnix/mkvextract.exe'"                  #
 alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                               # v2.2.0: https://github.com/quietvoid/dovi_tool/releases
-# Last dovi_tool version (1.5.3) supporting convert_to_cmv4 (non-modified build: https://github.com/quietvoid/dovi_tool/releases/tag/1.5.3
-# Additionally, this is a modified build (source: DoVi_Scripts: dovi_tool_2.9_to_4.0.exe) that skips injecting default values for L9 and L11 during CMv4 conversion
-alias dovi_tool_cmv4="'$TOOLS_DIR/dovi_tool_cmv4.exe'"
-
+alias dovi_tool_cmv4="'$TOOLS_DIR/dovi_tool_cmv4.exe'"                     # Modified dovi_tool 2.2.0 supporting allow_cmv4_transfer,
+                                                                           # L2 plotting, and extended RPU info output
 OUT_DIR="$(pwd)"
 PLOTS_DIR=""                     # <empty> - same as OUT_DIR
 TMP_DIR="$(pwd)/temp$START_TIME" # caution: This dir will be removed only if it is created by the script
 RPU_LEVELS="3,8,9,11,254"
 INFO_INTERMEDIATE='1'  # 0 - disabled,       1 - enabled
-INFO_L1_PLOT='1'       # 0 - disabled,       1 - enabled
+PLOT_INTERMEDIATE='3'  # 0 - disabled,       1 - L1 0nly,       2 - L2 only,       3 - L1 + L2
 FIX_CUTS_FIRST='1'     # 0 - disabled,       1 - enabled
 FIX_CUTS_CONSEC='1'    # 0 - disabled,       1 - enabled
 CLEAN_FILENAMES='1'    # 0 - disabled,       1 - enabled
@@ -37,12 +35,11 @@ AUDIO_COPY_MODE='3'    # 1 - 1st track only, 2 - 1st + compatibility, 3 - all
 SUBS_COPY_MODE='1'     # 0 - none,           1 - all,                 <lng> - based on ISO 639-2 lang code [e.g., eng]
 SUBS_LANG_CODES=''     # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
 EXTRACT_SHORT_SEC='23'
-FFMPEG_STRICT=1
-OPTIONS_PLOT_SET=0
+FFMPEG_STRICT=1        # 0 - disabled,       1 - enabled
 
 declare -A commands=(
   [info]="       Show Dolby Vision information            | xtospu      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [plot]="       Plot L1 dynamic brightness metadata      | xtos        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="       Plot L1/L2 metadata                      | xtosp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [frame-shift]="Calculate frame shift                    | b           | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [sync]="       Synchronize Dolby Vision RPU files       | bofnp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [fix]="        Fix or adjust Dolby Vision RPU(s)        | xtojnF      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
@@ -55,6 +52,7 @@ declare -A commands=(
   [mp3]="        Extract audio track(s) as MP3 file(s)    | xtos        | .mkv, .mp4, .m2ts, .ts"
 )
 declare -A cmd_description=(
+  [plot]="Plot L1 dynamic brightness and L2 trims metadata"
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
   [sync]="Synchronize RPU of <input> to align with RPU of <base-input>"
   [inject]="Sync & Inject RPU of <input> into <base-input>"
@@ -214,6 +212,13 @@ tmp_file() {
 
 out_file() {
   generate_file "$OUT_DIR" "$1" "$2" "$3" "$4" "$5" "$6"
+}
+
+out_base() {
+  local output="$1" ext="${2#.}" suffix="$3"
+  [[ -z "$output" ]] && return
+  [[ "${output,,}" == *".${ext,,}" ]] && output="${output%.*}"
+  echo "$output${suffix:+"-$suffix"}"
 }
 
 out_hybrid() {
@@ -383,33 +388,42 @@ cut_frame() {
   grep -qE "(^|\s)$frame($|\s)" "$(to_rpu_cuts "$input" 0 1)"
 }
 
-plot_l1() {
-  local input="$1" short_sample="$2" intermediate="$3" output="$4"
+plot_level() {
+  local rpu="$1" input_name="$2" level="$3" title="$4" output="$5" add_suffix="$6" l2_option=()
+  [[ "$level" != 1 && "$level" != 2 ]] && log_kill "Plotting unsupported for DV Level $level" 2 || level="L$level"
 
-  [[ "$short_sample" = 1 && "$intermediate" != 1 ]] && check_extension "$input" ".bin" && short_sample=0
+  [ "$add_suffix" = 1 ] && output=$(out_base "$output" 'png' "${level}")
+  output=$(generate_file "${PLOTS_DIR:-"$OUT_DIR"}" "$rpu" 'png' "${level}" "$output")
 
-  local -r rpu=$(to_rpu "$input" "$short_sample" "$intermediate")
-  local -r input_name=$(basename "$input")
+  log_t "Plotting %s metadata for: '%s' ..." "$level" "$input_name"
 
-  local output_prefix='L1-plot'
-  [ "$short_sample" = 1 ] && output_prefix+="-${EXTRACT_SHORT_SEC}s"
-  local -r plot=$(generate_file "${PLOTS_DIR:-"$OUT_DIR"}" "$rpu" 'png' "$output_prefix" "$output")
+  if [[ ! -f "$output" ]]; then
+    [ "$level" = "L2" ] && l2_option+=("--l2")
 
-  log "Plotting L1 metadata for: '$input_name' ..." 1
-
-  if [[ ! -f "$plot" ]]; then
-    if [ "$short_sample" = 1 ] && check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc'; then
-      local -r title="$(basename "$input") (sample duration: ${EXTRACT_SHORT_SEC}s)"
+    if dovi_tool plot -i "$rpu" -o "$output" -t "$title" "${l2_option[@]}" >/dev/null; then
+      logf "%s metadata for: '%s' plotted - output file: '%s'" "$level" "$input_name" "$output"
     else
-      local -r title=$(basename "$rpu")
+      log_b "$(red 'Error:') Failed to plot %s metadata for '%s' , skipping..." "$level" "$input_name"
     fi
-
-    dovi_tool plot -i "$rpu" -o "$plot" -t "$title" >/dev/null
-
-    log "L1 metadata for: '$input_name' plotted - output file: '$plot'"
   else
-    log "The L1 plot file: '$plot' already exists, skipping..."
+    logf "The %s plot file: '%s' already exists, skipping..." "$level" "$output"
   fi
+}
+
+plot() {
+  local input="$1" short_sample="$2" intermediate="$3" output="$4" rpu input_name title plot_all
+
+  if [ "$PLOT_INTERMEDIATE" = 0 ]; then
+    [ "$intermediate" != 1 ] && log_kill "Nothing to plot: $B--plot$N is set to$B 0$N" 2 || return
+  fi
+
+  rpu=$(to_rpu "$input" "$short_sample" "$intermediate")
+  input_name=$(basename "$input") && title="$input_name"
+  [ "$short_sample" = 1 ] && ! check_extension "$input" '.bin' && title+=" (sample duration: ${EXTRACT_SHORT_SEC}s)"
+
+  [ "$PLOT_INTERMEDIATE" = 3 ] && plot_all=1
+  [[ "$plot_all" = 1 || "$PLOT_INTERMEDIATE" = 1 ]] && plot_level "$rpu" "$input_name" 1 "$title" "$output" "$plot_all"
+  [[ "$plot_all" = 1 || "$PLOT_INTERMEDIATE" = 2 ]] && plot_level "$rpu" "$input_name" 2 "$title" "$output" "$plot_all"
 }
 
 audio_track_info() {
@@ -561,7 +575,7 @@ info_frames() {
 }
 
 info() {
-  local input="$1" short_sample="$2" short_input="$3" frames="$4" output="$5" batch="$6"
+  local input="$1" short_sample="$2" short_input="$3" frames="$4" output="$5" batch="$6" explicit_plot="$7"
   local input_name=$(basename "$input") type='Info' ext='txt'
 
   if ! check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin'; then
@@ -591,9 +605,8 @@ info() {
 
   [ -n "$output" ] && log_t "%s successfully printed to file: '%s'" "$type" "$output"
 
-  [ "$INFO_L1_PLOT" != 1 ] && return
-  [ "$OPTIONS_PLOT_SET" != 1 ] && [[ "$short_sample" = 1 || -n "$frames" ]] && return
-  plot_l1 "$input" "$short_sample" 1
+  [ "$explicit_plot" != 1 ] && [[ "$short_sample" = 1 || -n "$frames" ]] && return
+  plot "$input" "$short_sample" 1
 }
 
 png() {
@@ -771,10 +784,10 @@ fix_rpu() {
   log_t "RPU: '%s' fixed successfully - output: '%s'" "$rpu_name" "$(basename "$output")"
 
   if [[ "$quiet" != 1 && "$INFO_INTERMEDIATE" = 1 ]]; then
-    plot="$INFO_L1_PLOT" && INFO_L1_PLOT=0
+    plot="$PLOT_INTERMEDIATE" && PLOT_INTERMEDIATE=0
     info "$input_rpu" >&2
     info "$output" >&2
-    INFO_L1_PLOT="$plot"
+    PLOT_INTERMEDIATE="$plot"
   fi
 
   echo "$output"
@@ -1414,14 +1427,15 @@ help1() {
 }
 
 help() {
-  local cmd="$1" p s b t q bin clean multiple_inputs output_info default_plot_info default_output='generated' default_output_format='auto-detected'
+  local cmd="$1" p s b t q i bin clean multiple_inputs output_info default_plot_info default_output='generated' default_output_format='auto-detected'
   local -r description=${cmd_description[$cmd]:-$(cmd_info "$cmd")} formats=$(cmd_info "$cmd" 3)
   [[ "$cmd_options" == *b* ]] && b=1
   [[ "$cmd_options" == *t* ]] && t=1 && multiple_inputs='[ignored when multiple inputs]'
   [[ "$cmd_options" == *q* ]] && q=1
-  [[ "$cmd_options" == *s* && "$INFO_L1_PLOT" != 0 ]] && s=1 || p=1
+  [[ "$cmd" != 'plot' && "$cmd_options" == *s* && "$PLOT_INTERMEDIATE" != 0 ]] && s=1 || p=1
   [[ "$formats" == *bin* ]] && bin=1
   [ "$cmd" = 'extract' ] && default_output_format='bin'
+  [ "$cmd" != 'plot' ] && i=1
   [ "$cmd" = 'info' ] && default_output='<print to console>' && default_plot_info=" or $B--frames$N" || output_info="$multiple_inputs"
 
   case "$cmd_options" in
@@ -1432,6 +1446,7 @@ help() {
   *[bxs]*) help_left+=11 ;;
   *[tku]*) help_left+=10 ;;
   *o*) help_left+=8 ;;
+  *p*) help_left+=7 ;;
   *) help_left+=6 ;;
   esac
 
@@ -1478,8 +1493,13 @@ help() {
                                          Use $B--json-examples$N for samples"
   help1 'j' "--json-examples             Show examples for $B--json$N option"
   help1 "-n, --info <0|1>                Controls intermediate info commands [default: $B$INFO_INTERMEDIATE$N]"
-  help1 "-p, --plot <0|1>                Controls L1 plotting in info command${p:+" [default: $B$INFO_L1_PLOT$N]"}
-                                         ${s:+"[default: $B$INFO_L1_PLOT$N (${B}0$N if $B--sample$N$default_plot_info is used)]"}"
+  help1 "-p, --plot <0|1|2|3>            Controls L1/L2${i:+" intermediate"} plotting${p:+" [default: $B$PLOT_INTERMEDIATE$N]"}
+                                         ${s:+"[default: $B$PLOT_INTERMEDIATE$N (${B}0$N if $B--sample$N$default_plot_info is used)]"}
+                                         Allowed values:
+                                         $B- 0:$N none
+                                         $B- 1:$N L1 only
+                                         $B- 2:$N L2 only
+                                         $B- 3:$N L1 and L2"
   help1 "-c, --lang-codes <C1[,...]>     ISO 639-2 lang codes of subtitle tracks to extract
                                          [default: $B${SUBS_LANG_CODES:-all}$N; example value: 'eng,pol']"
   clean="-m, --clean-filenames <0|1>     Controls output filename cleanup [default: $B$CLEAN_FILENAMES$N]
@@ -1499,12 +1519,12 @@ help() {
                                          $multiple_inputs"
   help1 "    --find-subs <0|1>           Controls subtitles auto-detection [default: $B$SUBS_AUTODETECTION$N]
                                          If ${B}1$N, searches for matching subs within input's dir"
-  help1 "    --copy-subs <OPTION>        Controls input subtitle tracks to copy [default: $B$SUBS_COPY_MODE$N]
+  help1 "    --copy-subs <0|1|LNG>       Controls input subtitle tracks to copy [default: $B$SUBS_COPY_MODE$N]
                                          Allowed values:
                                          $B- 0:$N     none
                                          $B- 1:$N     all
                                          $B- <lng>:$N based on ISO 639-2 lang code [e.g., eng]"
-  help1 "    --copy-audio <OPTION>       Controls input audio tracks to copy [default: $B$AUDIO_COPY_MODE$N]
+  help1 "    --copy-audio <1|2|3>        Controls input audio tracks to copy [default: $B$AUDIO_COPY_MODE$N]
                                          Allowed values:
                                          $B- 1:$N 1st track only
                                          $B- 2:$N 1st track + compatibility if 1st is TrueHD
@@ -1716,7 +1736,7 @@ parse_args() {
   [[ $# -eq 0 ]] && show_help "$cmd" 1 && return
 
   local allowed_formats=$(cmd_info "$cmd" 3)
-  local -i batch=0 sample=0 skip_sync=0 rpu_raw=0 json_examples=0
+  local -i batch=0 sample=0 skip_sync=0 rpu_raw=0 json_examples=0 explicit_plot=0
 
   [[ "$cmd_options" == *t* ]] && batch=1
 
@@ -1747,7 +1767,7 @@ parse_args() {
     -k | --time)                 timestamps=$(parse_option "$2" "$timestamps" "$cmd" "$1" 'k' '[[HH:]MM:]SS' '((([0-5]?[0-9]:){1,2}[0-5]?[0-9])|[0-9]+)' 1) ;;
     -l | --rpu-levels)           rpu_levels=$(parse_option "$2" "$rpu_levels" "$cmd" "$1" 'l' '1-6, 8-11, 254, 255' '([1-689]|1[01]|25[45])' 1) ;;
     -n | --info)                       info=$(parse_option "$2" "$info" "$cmd" "$1" 'n' '0, 1') ;;
-    -p | --plot)                       plot=$(parse_option "$2" "$plot" "$cmd" "$1" 'p' '0, 1') ;;
+    -p | --plot)                       plot=$(parse_option "$2" "$plot" "$cmd" "$1" 'p' '0, 1, 2, 3') ;;
     -c | --lang-codes)           lang_codes=$(parse_option "$2" "$lang_codes" "$cmd" "$1" 'c' '<ISO 639-2 lang codes>' '[a-z]{3}' 1) ;;
     -m | --clean-filenames) clean_filenames=$(parse_option "$2" "$clean_filenames" "$cmd" "$1" 'm' '0, 1') ;;
     -r | --hevc)                       hevc=$(parse_file "$2" "$hevc" "$cmd" "$1" 'r' '.hevc') ;;
@@ -1799,7 +1819,7 @@ parse_args() {
   [[ -n "$sample_duration" ]] && EXTRACT_SHORT_SEC="$sample_duration"
   [[ -n "$rpu_levels" ]] && RPU_LEVELS=$(deduplicate_list "$rpu_levels" 1)
   [[ -n "$info" ]] && INFO_INTERMEDIATE="$info"
-  [[ -n "$plot" ]] && INFO_L1_PLOT="$plot" && OPTIONS_PLOT_SET=1
+  [[ -n "$plot" ]] && PLOT_INTERMEDIATE="$plot" && explicit_plot=1
   [[ -n "$cuts_first" ]] && FIX_CUTS_FIRST="$cuts_first"
   [[ -n "$cuts_consecutive" ]] && FIX_CUTS_CONSEC="$cuts_consecutive"
   [[ -n "$find_subs" ]] && SUBS_AUTODETECTION="$find_subs"
@@ -1816,8 +1836,8 @@ parse_args() {
 
   for input in "${inputs[@]}"; do
     case "$cmd" in
-    info) info "$input" "$sample" 0 "$frames" "$output" "$batch" ;;
-    plot) plot_l1 "$input" "$sample" 0 "$output" ;;
+    info) info "$input" "$sample" 0 "$frames" "$output" "$batch" "$explicit_plot" ;;
+    plot) plot "$input" "$sample" 0 "$output" ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
     fix) fix_rpu "$input" "$l5" "$cuts_clear" "$json" 0 "$output" >/dev/null ;;

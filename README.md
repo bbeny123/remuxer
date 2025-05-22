@@ -79,7 +79,7 @@ Most of these variables can also be **overridden** at runtime using the correspo
 | `PLOTS_DIR`                                  | L1 plots output directory                                                                                                                                         | *\<path>*<br/>**Default:** same as `OUT_DIR`                                                         |
 | `RPU_LEVELS`<br/>*`--rpu-levels`*            | RPU levels used by **inject** command<br/>**Valid RPU levels:** 1-6, 8-11, 254, 255                                                                               | *\<comma-separated RPU levels list>*<br/>**Default:** `3,8,9,11,254` *(CMv4.0 levels)*               |
 | `INFO_INTERMEDIATE`<br/>*`--info`*           | Intermediate **info** commands                                                                                                                                    | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
-| `INFO_L1_PLOT`<br/>*`--plot`*                | L1 plotting in **info** command                                                                                                                                   | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
+| `PLOT_INTERMEDIATE`<br/>*`--plot`*           | Default **L1/L2** plotting mode                                                                                                                                   | `0` - none<br/>`1` - **L1** only<br/>`2` - **L2** only<br/>`3` - **L1** and **L2** *(default)*       |
 | `FIX_CUTS_FIRST`<br/>*`--cuts-first`*        | Force first frame as scene-cut                                                                                                                                    | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
 | `FIX_CUTS_CONSEC`<br/>*`--cuts-consecutive`* | Consecutive scene-cuts fixing                                                                                                                                     | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
 | `CLEAN_FILENAMES`<br/>*`--clean-filenames`*  | Clean *output* filenames<br/>**Examples:**<br/>&nbsp;&nbsp;**•** *Show.S01E01.HDR* → *Show S01E01*<br/>&nbsp;&nbsp;**•** *A.Movie.2025.2160p.DV* → *A&nbsp;Movie* | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
@@ -102,7 +102,7 @@ Usage: remuxer [OPTIONS] <COMMAND>
 
 Commands:
   info           Show Dolby Vision information
-  plot           Plot L1 dynamic brightness metadata
+  plot           Plot L1/L2 metadata
   frame-shift    Calculate frame shift
   sync           Synchronize Dolby Vision RPU files
   fix            Fix or adjust Dolby Vision RPU(s)
@@ -147,12 +147,12 @@ Options:
   -o, --output <OUTPUT>     Output file path [default: <print to console>]
   -u, --frames <F1[,...]>   Print RPU info for given frames
   -s, --sample [<SECONDS>]  Process only the first N seconds of input
-  -p, --plot <0|1>          Controls L1 plotting in info command
+  -p, --plot <0|1|2|3>      Controls L1/L2 intermediate plotting
 ```
 
 ### `plot` command
 
-**Description:** Plot L1 dynamic brightness metadata
+**Description:** Plot **L1** dynamic brightness and **L2** trims metadata
 
 ```bash
 Usage: remuxer plot [OPTIONS] [INPUT...]
@@ -163,6 +163,7 @@ Options:
   -t, --input-type <TYPE>   Filter files by type in dir inputs
   -o, --output <OUTPUT>     Output file path [default: generated]
   -s, --sample [<SECONDS>]  Process only the first N seconds of input
+  -p, --plot <0|1|2|3>      Controls L1/L2 plotting [default: 3]
 ```
 
 ### `frame-shift` command
@@ -190,7 +191,7 @@ Options:
   -o, --output <OUTPUT>      Output file path [default: generated]
   -f, --frame-shift <SHIFT>  Frame shift value [default: auto-calculated]
   -n, --info <0|1>           Controls intermediate info commands [default: 1]
-  -p, --plot <0|1>           Controls L1 plotting in info command [default: 1]
+  -p, --plot <0|1|2|3>       Controls L1/L2 intermediate plotting [default: 3]
 ```
 
 ### `fix` command
@@ -235,13 +236,13 @@ Options:
       --cuts-first <0|1>          Force first frame as scene-cut [default: 1]
       --cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: 1]
   -n, --info <0|1>                Controls intermediate info commands [default: 1]
-  -p, --plot <0|1>                Controls L1 plotting in info command [default: 1]
+  -p, --plot <0|1|2|3>            Controls L1/L2 intermediate plotting [default: 3]
 
 Options for .mkv / .mp4 output:
       --subs <FILE>               .srt subtitle file path to include
       --find-subs <0|1>           Controls subtitles auto-detection [default: 1]
-      --copy-subs <OPTION>        Controls input subtitle tracks to copy [default: 1]
-      --copy-audio <OPTION>       Controls input audio tracks to copy [default: 3]
+      --copy-subs <0|1|LNG>       Controls input subtitle tracks to copy [default: 1]
+      --copy-audio <1|2|3>        Controls input audio tracks to copy [default: 3]
       --title <TITLE>             Metadata title (e.g., movie name)
       --auto-title <0|1>          Controls generation of metadata title
       --auto-tracks <0|1>         Controls generation of some track names [default: 1]
@@ -265,8 +266,8 @@ Options:
 Options for .mkv / .mp4 output:
       --subs <FILE>             .srt subtitle file path to include
       --find-subs <0|1>         Controls subtitles auto-detection [default: 1]
-      --copy-subs <OPTION>      Controls input subtitle tracks to copy [default: 1]
-      --copy-audio <OPTION>     Controls input audio tracks to copy [default: 3]
+      --copy-subs <0|1|LNG>     Controls input subtitle tracks to copy [default: 1]
+      --copy-audio <1|2|3>      Controls input audio tracks to copy [default: 3]
   -r, --hevc <FILE>             .hevc file path to replace input video track
       --title <TITLE>           Metadata title (e.g., movie name)
       --auto-title <0|1>        Controls generation of metadata title
@@ -289,7 +290,7 @@ Options:
   -e, --output-format <FORMAT>  Output format [default: bin]
   -s, --sample [<SECONDS>]      Process only the first N seconds of input
   -n, --info <0|1>              Controls intermediate info commands [default: 1]
-  -p, --plot <0|1>              Controls L1 plotting in info command
+  -p, --plot <0|1|2|3>          Controls L1/L2 intermediate plotting
 ```
 
 ### `cuts` command
