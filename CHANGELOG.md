@@ -13,9 +13,13 @@
     - New option: `--raw-rpu` – injects input RPU (without making hybrid RPU)
 - `extract` **command:**
     - Added support for extracting `.hevc` _base layer_
+- `plot` **command:**
+    - Added support for plotting **L2 metadata**
 - Increased max tested offset during frame shift calculation
+- **Shell tab-completion:** suggests only files with matching extensions
 - Bug fixes
 - Logging improvements
+- Updated for `dovi_tool 2.2.0+` features
 
 ### 1.0.3
 
