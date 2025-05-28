@@ -533,8 +533,8 @@ info_summary() {
   local -r rpu=$(to_rpu "$input" "$short_sample")
 
   summary=$(dovi_tool_cmv4 info -s "$rpu" | grep -E '^ ')
-  summary=${summary//"TOP: 0"/"TOP: $(yellow 0)"}
-  summary=${summary//"BOTTOM: 0"/"BOTTOM: $(yellow 0)"}
+  summary=${summary//"top=0,"/"top=$(yellow 0),"}
+  summary=${summary//"bottom=0,"/"bottom=$(yellow 0),"}
   summary=${summary//"N/A"/"$(yellow 'N/A')"}
 
   dv_profile=$(echo "$summary" | grep 'Profile' | grep -oE '[0-9]+')
