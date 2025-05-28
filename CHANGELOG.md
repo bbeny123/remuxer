@@ -14,7 +14,7 @@
 - `extract` **command:**
     - Added support for extracting `.hevc` _base layer_
 - `plot` **command:**
-    - Added support for plotting **L2 metadata**
+    - Added support for plotting **L2** and **L8 metadata**
 - Increased max tested offset during frame shift calculation
 - **Shell tab-completion:** suggests only files with matching extensions
 - Bug fixes

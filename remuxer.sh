@@ -23,7 +23,7 @@ PLOTS_DIR=""                     # <empty> - same as OUT_DIR
 TMP_DIR="$(pwd)/temp$START_TIME" # caution: This dir will be removed only if it is created by the script
 RPU_LEVELS="3,8,9,11,254"
 INFO_INTERMEDIATE='1'  # 0 - disabled,       1 - enabled
-PLOT_INTERMEDIATE='3'  # 0 - disabled,       1 - L1 0nly,       2 - L2 only,       3 - L1 + L2
+PLOT_INTERMEDIATE='L1,L2,L2_MAX,L8T' # all,none,L1,L2,L2_600,L2_1000,L2_MAX,L8T,L8T_600,L8T_1000,L8T_MAX,L8S,L8S_600,L8S_1000,L8S_MAX,L8S,L8S_600,L8S_1000,L8S_MAX
 FIX_CUTS_FIRST='1'     # 0 - disabled,       1 - enabled
 FIX_CUTS_CONSEC='1'    # 0 - disabled,       1 - enabled
 CLEAN_FILENAMES='1'    # 0 - disabled,       1 - enabled
@@ -388,42 +388,95 @@ cut_frame() {
   grep -qE "(^|\s)$frame($|\s)" "$(to_rpu_cuts "$input" 0 1)"
 }
 
-plot_level() {
-  local rpu="$1" input_name="$2" level="$3" title="$4" output="$5" add_suffix="$6" l2_option=()
-  [[ "$level" != 1 && "$level" != 2 ]] && log_kill "Plotting unsupported for DV Level $level" 2 || level="L$level"
+plot_level_nits() {
+  local rpu="$1" input_name="$2" level="$3" title="$4" subtitle="$5" output="$6" target_nits="$7" l2_option=("--plot-type" "${3,,}")
+  [ -n "$target_nits" ] && level+="_$target_nits" && subtitle+=" ($target_nits nits)" && l2_option+=("--target-nits" "$target_nits")
 
-  [ "$add_suffix" = 1 ] && output=$(out_base "$output" 'png' "${level}")
-  output=$(generate_file "${PLOTS_DIR:-"$OUT_DIR"}" "$rpu" 'png' "${level}" "$output")
+  output=$(out_base "$output" 'png' "$level")
+  output=$(generate_file "${PLOTS_DIR:-"$OUT_DIR"}" "$rpu" 'png' "$level" "$output")
 
-  log_t "Plotting %s metadata for: '%s' ..." "$level" "$input_name"
+  log_t "Plotting %s metadata for: '%s' ..." "$subtitle" "$input_name"
 
   if [[ ! -f "$output" ]]; then
-    [ "$level" = "L2" ] && l2_option+=("--l2")
-
-    if dovi_tool plot -i "$rpu" -o "$output" -t "$title" "${l2_option[@]}" >/dev/null; then
-      logf "%s metadata for: '%s' plotted - output file: '%s'" "$level" "$input_name" "$output"
+    if dovi_tool_cmv4 plot -i "$rpu" -o "$output" -t "$subtitle – $title" "${l2_option[@]}" >/dev/null; then
+      logf "%s metadata for: '%s' plotted - output file: '%s'" "$subtitle" "$input_name" "$output"
     else
-      log_b "$(red 'Error:') Failed to plot %s metadata for '%s' , skipping..." "$level" "$input_name"
+      log_b "$(red 'Error:') Failed to plot %s metadata for '%s' , skipping..." "$subtitle" "$input_name"
     fi
   else
-    logf "The %s plot file: '%s' already exists, skipping..." "$level" "$output"
+    logf "The %s plot file: '%s' already exists, skipping..." "$subtitle" "$output"
   fi
 }
 
-plot() {
-  local input="$1" short_sample="$2" intermediate="$3" output="$4" rpu input_name title plot_all
+plot_level() {
+  local rpu="$1" input_name="$2" verbose="$3" plots=" $4 " level="$5" title="$6" subtitle="$7" output="$8" trims="$9" cm4="${10}" target_nits
 
-  if [ "$PLOT_INTERMEDIATE" = 0 ]; then
-    [ "$intermediate" != 1 ] && log_kill "Nothing to plot: $B--plot$N is set to$B 0$N" 2 || return
+  [[ "$plots" != " lx " && "$plots" != *"${level,,}"* ]] && return
+
+  if [[ "$level" == *L8* && "$cm4" != 1 ]]; then
+    [ "$verbose" = 1 ] && log_t "Cannot plot %s for: '%s' - CM v4.0 RPU is required, skipping" "$subtitle" "$input_name"
+    return
   fi
 
-  rpu=$(to_rpu "$input" "$short_sample" "$intermediate")
+  if [[ "$level" == *L1* ]]; then
+    plot_level_nits "$rpu" "$input_name" "$level" "$title" "$subtitle" "$output"
+    return
+  fi
+
+  plots=${plots//" ${level,,} "/" ${level,,}_100 "}
+  for target_nits in 100 600 1000; do
+    [[ "$plots" != " lx " && "$plots" != *" ${level,,}_$target_nits "* ]] && continue
+
+    if [[ "$trims" != *"$target_nits "* ]]; then
+
+      [ "$verbose" = 1 ] && log_t "Cannot plot %s for: '%s' - RPU doesn't contain metadata for %s nits target, skipping" "$subtitle" "$input_name" "$target_nits"
+      continue
+    fi
+
+    plot_level_nits "$rpu" "$input_name" "$level" "$title" "$subtitle" "$output" "$target_nits"
+  done
+}
+
+plot_max_target() {
+  local trims="$1" prefix="$2" max
+  [[ -n "$trims" ]] && max=$(grep -oE "100|600|1000" <<<"$trims" | sort -nu | tail -n 1)
+  [[ -n "$max" ]] && echo "$prefix$max"
+}
+
+plot() {
+  local input="$1" short_sample="$2" verbose="$3" summary="$4" output="$5" direct="$6" plots="$PLOT_INTERMEDIATE"
+  local rpu input_name title l2_trims l8_trims cm4
+
+  if [[ -z "$plots" || " $plots " =~ [[:space:]](0|none)[[:space:]] ]]; then
+    [ "$direct" = 1 ] && log_kill "Nothing to plot: $B--plot$N is set to$B none$N or$B 0$N" 2 || return
+  fi
+
+  rpu=$(to_rpu "$input" "$short_sample" "$verbose")
   input_name=$(basename "$input") && title="$input_name"
   [ "$short_sample" = 1 ] && ! check_extension "$input" '.bin' && title+=" (sample duration: ${EXTRACT_SHORT_SEC}s)"
 
-  [ "$PLOT_INTERMEDIATE" = 3 ] && plot_all=1
-  [[ "$plot_all" = 1 || "$PLOT_INTERMEDIATE" = 1 ]] && plot_level "$rpu" "$input_name" 1 "$title" "$output" "$plot_all"
-  [[ "$plot_all" = 1 || "$PLOT_INTERMEDIATE" = 2 ]] && plot_level "$rpu" "$input_name" 2 "$title" "$output" "$plot_all"
+  [[ " $plots " =~ [[:space:]](1|all)[[:space:]] ]] && plots="lx"
+
+  if [[ "$plots" =~ lx|l2|l8 ]]; then
+    [ -z "$summary" ] && summary=$(dovi_tool_cmv4 info -s "$rpu" 2>&1)
+
+    [[ "$plots" =~ lx|l2 ]] && l2_trims=$(grep -i 'L2 trims' <<<"$summary")
+    [[ "$plots" == *l2_max* ]] && plots="${plots//l2_max/"$(plot_max_target "$l2_trims" "l2_")"}"
+
+    if [[ "$plots" =~ lx|l8 ]]; then
+      l8_trims=$(grep -i 'L8 trims' <<<"$summary")
+      grep -q 'CM v4.0' <<<"$summary" && cm4=1
+      [[ -n "$l8_trims" && "$plots" == *max* ]] && plots="${plots//max/"$(plot_max_target "$l8_trims")"}"
+    fi
+
+    [ "$plots" = 'lx' ] && verbose=0
+  fi
+
+  plot_level "$rpu" "$input_name" "$verbose" "$plots" 'L1' "$title" 'L1 Dynamic Brightness' "$output"
+  plot_level "$rpu" "$input_name" "$verbose" "$plots" 'L2' "$title" 'L2 Trims' "$output" "$l2_trims"
+  plot_level "$rpu" "$input_name" "$verbose" "$plots" 'L8T' "$title" 'L8 Trims' "$output" "$l8_trims" "$cm4"
+  plot_level "$rpu" "$input_name" "$verbose" "$plots" 'L8S' "$title" 'L8 Saturation Vectors' "$output" "$l8_trims" "$cm4"
+  plot_level "$rpu" "$input_name" "$verbose" "$plots" 'L8H' "$title" 'L8 Hue Vectors' "$output" "$l8_trims" "$cm4"
 }
 
 audio_track_info() {
@@ -575,7 +628,7 @@ info_frames() {
 }
 
 info() {
-  local input="$1" short_sample="$2" short_input="$3" frames="$4" output="$5" batch="$6" explicit_plot="$7"
+  local input="$1" short_sample="$2" short_input="$3" frames="$4" output="$5" batch="$6" explicit_plot="$7" summary
   local input_name=$(basename "$input") type='Info' ext='txt'
 
   if ! check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin'; then
@@ -596,17 +649,16 @@ info() {
 
   if [ -n "$frames" ]; then
     info_frames "$input" "$short_sample" "$frames" "$output"
-  elif [ -n "$output" ]; then
-    info_summary "$input" "$short_sample" >"$output"
-    cat "$output"
   else
-    info_summary "$input" "$short_sample"
+    summary=$(info_summary "$input" "$short_sample")
+    log "$summary"
+    [ -n "$output" ] && echo "$summary" >"$output"
   fi
 
   [ -n "$output" ] && log_t "%s successfully printed to file: '%s'" "$type" "$output"
 
   [ "$explicit_plot" != 1 ] && [[ "$short_sample" = 1 || -n "$frames" ]] && return
-  plot "$input" "$short_sample" 1
+  plot "$input" "$short_sample" 0 "$summary"
 }
 
 png() {
@@ -1412,7 +1464,7 @@ help0() {
 
   [[ "$empty_line" = 1 && "$help_short" != 1 ]] && echo ""
   while IFS= read -r line; do
-    [[ "$line" =~ ^\ *$ ]] && continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
     left=${line:0:$help_left}
     echo "  $B${left//</$N<}$N$(trim "${line:$help_left}")"
     [ "$help_short" = 1 ] && break
@@ -1432,11 +1484,11 @@ help() {
   [[ "$cmd_options" == *b* ]] && b=1
   [[ "$cmd_options" == *t* ]] && t=1 && multiple_inputs='[ignored when multiple inputs]'
   [[ "$cmd_options" == *q* ]] && q=1
-  [[ "$cmd" != 'plot' && "$cmd_options" == *s* && "$PLOT_INTERMEDIATE" != 0 ]] && s=1 || p=1
+  [[ "$cmd" != 'plot' && "$cmd_options" == *s* && "${PLOT_INTERMEDIATE,,}" != "none" && "$PLOT_INTERMEDIATE" != 0 ]] && s=1
   [[ "$formats" == *bin* ]] && bin=1
   [ "$cmd" = 'extract' ] && default_output_format='bin'
   [ "$cmd" != 'plot' ] && i=1
-  [ "$cmd" = 'info' ] && default_output='<print to console>' && default_plot_info=" or $B--frames$N" || output_info="$multiple_inputs"
+  [ "$cmd" = 'info' ] && default_output='<print to console>' && default_plot_info="/$B--frames$N" || output_info="$multiple_inputs"
 
   case "$cmd_options" in
   *F*) help_left+=17 ;;
@@ -1445,8 +1497,7 @@ help() {
   *f*) help_left+=12 ;;
   *[bxs]*) help_left+=11 ;;
   *[tku]*) help_left+=10 ;;
-  *o*) help_left+=8 ;;
-  *p*) help_left+=7 ;;
+  *[op]*) help_left+=8 ;;
   *) help_left+=6 ;;
   esac
 
@@ -1493,13 +1544,18 @@ help() {
                                          Use $B--json-examples$N for samples"
   help1 'j' "--json-examples             Show examples for $B--json$N option"
   help1 "-n, --info <0|1>                Controls intermediate info commands [default: $B$INFO_INTERMEDIATE$N]"
-  help1 "-p, --plot <0|1|2|3>            Controls L1/L2${i:+" intermediate"} plotting${p:+" [default: $B$PLOT_INTERMEDIATE$N]"}
-                                         ${s:+"[default: $B$PLOT_INTERMEDIATE$N (${B}0$N if $B--sample$N$default_plot_info is used)]"}
+  help1 "-p, --plot <P1[,...]>           Controls L1/L2/L8${i:+" intermediate"} plotting
+                                         [default: $B$PLOT_INTERMEDIATE$N${s:+" (${B}none$N if $B--sample$N$default_plot_info)"}]
                                          Allowed values:
-                                         $B- 0:$N none
-                                         $B- 1:$N L1 only
-                                         $B- 2:$N L2 only
-                                         $B- 3:$N L1 and L2"
+                                         $B- 0 / none$N
+                                         $B- 1 / all$N
+                                         $B- L1$N         – L1 Dynamic Brightness
+                                         $B- L2[_NITS]$N  – L2 Trims
+                                         $B- L8T[_NITS]$N – L8 Trims
+                                         $B- L8S[_NITS]$N – L8 Saturation Vectors
+                                         $B- L8H[_NITS]$N – L8 Hue Vectors
+                                         ${B}NITS$N = 100 (default), 600, 1000 or MAX (highest available)
+                                         L8 plots require CM v4.0 RPU"
   help1 "-c, --lang-codes <C1[,...]>     ISO 639-2 lang codes of subtitle tracks to extract
                                          [default: $B${SUBS_LANG_CODES:-all}$N; example value: 'eng,pol']"
   clean="-m, --clean-filenames <0|1>     Controls output filename cleanup [default: $B$CLEAN_FILENAMES$N]
@@ -1647,6 +1703,7 @@ parse_dir() {
 parse_option() {
   local value="${1// /}" current="$2" cmd="$3" option="$4" required="$5" allowed_values="$6" regex="$7" splittable="$8" required_items="$9" result
   local -i i=0
+  value="${value,,}"
 
   option_valid "$value" "$current" "$cmd" "$option" "$required" || return
   [ "$splittable" = 1 ] && value=${value//,/ }
@@ -1656,7 +1713,7 @@ parse_option() {
     if [[ -n "$regex" ]]; then
       [[ "$v" =~ ^$regex$ ]] && continue
     else
-      [[ " ${allowed_values//,/} " == *\ $v\ * ]] && continue
+      [[ " ${allowed_values//,/ } " == *\ $v\ * ]] && continue
     fi
     option_fatal "$option" "'$v' is not a valid value (allowed: $allowed_values)"
   done
@@ -1767,7 +1824,7 @@ parse_args() {
     -k | --time)                 timestamps=$(parse_option "$2" "$timestamps" "$cmd" "$1" 'k' '[[HH:]MM:]SS' '((([0-5]?[0-9]:){1,2}[0-5]?[0-9])|[0-9]+)' 1) ;;
     -l | --rpu-levels)           rpu_levels=$(parse_option "$2" "$rpu_levels" "$cmd" "$1" 'l' '1-6, 8-11, 254, 255' '([1-689]|1[01]|25[45])' 1) ;;
     -n | --info)                       info=$(parse_option "$2" "$info" "$cmd" "$1" 'n' '0, 1') ;;
-    -p | --plot)                       plot=$(parse_option "$2" "$plot" "$cmd" "$1" 'p' '0, 1, 2, 3') ;;
+    -p | --plot)                       plot=$(parse_option "$2" "$plot" "$cmd" "$1" 'p' '<none, all, L1, L2[_NITS}, L8T[_NITS}, L8H[_NITS}, L8S[_NITS}>' '(0|1|none|all|l1|(l(2|8t|8s|8h)(_(100|600|1000|max))?))' 1) ;;
     -c | --lang-codes)           lang_codes=$(parse_option "$2" "$lang_codes" "$cmd" "$1" 'c' '<ISO 639-2 lang codes>' '[a-z]{3}' 1) ;;
     -m | --clean-filenames) clean_filenames=$(parse_option "$2" "$clean_filenames" "$cmd" "$1" 'm' '0, 1') ;;
     -r | --hevc)                       hevc=$(parse_file "$2" "$hevc" "$cmd" "$1" 'r' '.hevc') ;;
@@ -1819,7 +1876,7 @@ parse_args() {
   [[ -n "$sample_duration" ]] && EXTRACT_SHORT_SEC="$sample_duration"
   [[ -n "$rpu_levels" ]] && RPU_LEVELS=$(deduplicate_list "$rpu_levels" 1)
   [[ -n "$info" ]] && INFO_INTERMEDIATE="$info"
-  [[ -n "$plot" ]] && PLOT_INTERMEDIATE="$plot" && explicit_plot=1
+  [[ -n "$plot" ]] && PLOT_INTERMEDIATE=$(deduplicate_list "$plot") && explicit_plot=1
   [[ -n "$cuts_first" ]] && FIX_CUTS_FIRST="$cuts_first"
   [[ -n "$cuts_consecutive" ]] && FIX_CUTS_CONSEC="$cuts_consecutive"
   [[ -n "$find_subs" ]] && SUBS_AUTODETECTION="$find_subs"
@@ -1832,12 +1889,14 @@ parse_args() {
   [[ -n "$frames" ]] && frames="$(deduplicate_list "$frames" 1)"
   [[ -n "$timestamps" ]] && timestamps="$(deduplicate_list "$timestamps")"
 
+  PLOT_INTERMEDIATE="${PLOT_INTERMEDIATE,,}" && PLOT_INTERMEDIATE="${PLOT_INTERMEDIATE//,/ }"
+
   tmp_trap
 
   for input in "${inputs[@]}"; do
     case "$cmd" in
     info) info "$input" "$sample" 0 "$frames" "$output" "$batch" "$explicit_plot" ;;
-    plot) plot "$input" "$sample" 0 "$output" ;;
+    plot) plot "$input" "$sample" "$explicit_plot" "" "$output" 1 ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
     fix) fix_rpu "$input" "$l5" "$cuts_clear" "$json" 0 "$output" >/dev/null ;;

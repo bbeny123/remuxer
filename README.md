@@ -68,26 +68,26 @@ To enable completion permanently, add the appropriate lines to `~/.bash_profile`
 The script’s default behavior can be **customized** using variables defined at the top of the script.  
 Most of these variables can also be **overridden** at runtime using the corresponding CLI options.
 
-| Variable<br/>CLI&nbsp;option                 | Description                                                                                                                                                       | Allowed&nbsp;values                                                                                  |
-|----------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `OUT_DIR`<br/>*`--out-dir`*                  | Output directory                                                                                                                                                  | *\<path>*<br/>**Default:** `working dir`                                                             |
-| `TMP_DIR`<br/>*`--tmp-dir`*                  | Temporary directory for intermediate files<br/>*Will be **auto-removed** if created by the script*                                                                | *\<path>*<br/>**Default:** auto‑created&nbsp;in *`working dir`*                                      |
-| `PLOTS_DIR`                                  | L1 plots output directory                                                                                                                                         | *\<path>*<br/>**Default:** same as `OUT_DIR`                                                         |
-| `RPU_LEVELS`<br/>*`--rpu-levels`*            | RPU levels used by **inject** command<br/>**Valid RPU levels:** 1-6, 8-11, 254, 255                                                                               | *\<comma-separated RPU levels list>*<br/>**Default:** `3,8,9,11,254` *(CMv4.0 levels)*               |
-| `INFO_INTERMEDIATE`<br/>*`--info`*           | Intermediate **info** commands                                                                                                                                    | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
-| `PLOT_INTERMEDIATE`<br/>*`--plot`*           | Default **L1/L2** plotting mode                                                                                                                                   | `0` - none<br/>`1` - **L1** only<br/>`2` - **L2** only<br/>`3` - **L1** and **L2** *(default)*       |
-| `FIX_CUTS_FIRST`<br/>*`--cuts-first`*        | Force first frame as scene-cut                                                                                                                                    | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
-| `FIX_CUTS_CONSEC`<br/>*`--cuts-consecutive`* | Consecutive scene-cuts fixing                                                                                                                                     | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
-| `CLEAN_FILENAMES`<br/>*`--clean-filenames`*  | Clean *output* filenames<br/>**Examples:**<br/>&nbsp;&nbsp;**•** *Show.S01E01.HDR* → *Show S01E01*<br/>&nbsp;&nbsp;**•** *A.Movie.2025.2160p.DV* → *A&nbsp;Movie* | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
-| `SUBS_AUTODETECTION`<br/>*`--find-subs`*     | Additional subtitles auto-detection                                                                                                                               | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
-| `TITLE_SHOWS_AUTO`<br/>*`--auto-title`*      | Generation of **TV shows** metadata title<br/>*(based on **input's filename**)*                                                                                   | `0` - disabled *(default)*<br/>`1` - enabled                                                         |
-| `TITLE_MOVIES_AUTO`<br/>*`--auto-title`*     | Generation of **movies** metadata title<br/>*(based on **input's filename**)*                                                                                     | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
-| `TRACK_NAMES_AUTO`<br/>*`--auto-tracks`*     | Generation of some metadata track names<br/>**Examples:**<br/>&nbsp;&nbsp;**• audio:** *TrueHD Atmos 7.1*<br/>&nbsp;&nbsp;**• subs:** *Polish*                    | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
-| `AUDIO_COPY_MODE`<br/>*`--copy-audio`*       | Input's audio tracks copy mode                                                                                                                                    | `1` - 1st track only<br/>`2` - 1st + compatibility if 1st is *TrueHD*<br/>`3` - all *(default)*<br/> |
-| `SUBS_COPY_MODE`<br/>*`--copy-subs`*         | Input's subtitle tracks copy mode                                                                                                                                 | `0` - none<br/>`1` - all *(default)*<br/>`<lng>` - ISO 639-2 lang code based                         |
-| `SUBS_LANG_CODES`<br/>*`--lang-codes`*       | Subtitle language ISO 639-2 codes to extract<br/>*(**subs** command only)*                                                                                        | *\<comma-separated ISO 639-2 codes>*<br/>**Default:** `all`                                          |
-| `EXTRACT_SHORT_SEC`                          | Sample duration in seconds<br/>*(related with **--sample** option)*                                                                                               | *\<duration in seconds>*<br/>**Default:** `23`                                                       |
-| `FFMPEG_STRICT`                              | Controls FFmpeg experimental strict mode<br/>**Note:** Avoid using **untrusted inputs** if `1`                                                                    | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
+| Variable<br/>CLI&nbsp;option                 | Description                                                                                                                                                                                                                                                            | Allowed&nbsp;values                                                                                  |
+|----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `OUT_DIR`<br/>*`--out-dir`*                  | Output directory                                                                                                                                                                                                                                                       | *\<path>*<br/>**Default:** `working dir`                                                             |
+| `TMP_DIR`<br/>*`--tmp-dir`*                  | Temporary directory for intermediate files<br/>*Will be **auto-removed** if created by the script*                                                                                                                                                                     | *\<path>*<br/>**Default:** auto‑created&nbsp;in *`working dir`*                                      |
+| `PLOTS_DIR`                                  | L1 plots output directory                                                                                                                                                                                                                                              | *\<path>*<br/>**Default:** same as `OUT_DIR`                                                         |
+| `RPU_LEVELS`<br/>*`--rpu-levels`*            | RPU levels used by **inject** command<br/>**Valid RPU levels:** 1-6, 8-11, 254, 255                                                                                                                                                                                    | *\<comma-separated RPU levels list>*<br/>**Default:** `3,8,9,11,254` *(CMv4.0 levels)*               |
+| `INFO_INTERMEDIATE`<br/>*`--info`*           | Intermediate **info** commands**                                                                                                                                                                                                                                       | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
+| `PLOT_INTERMEDIATE`<br/>*`--plot`*           | Default plotting mode<br/>**Valid values:**<br/>`0` / `none` - none<br/>`1` / `all` - all available<br/>`L1` - L1 Dynamic Brightness<br/>`L2[_NITS]` - L2 Trims<br/>`L8T[_NITS]` - L8 Trims<br/>`L8S[_NITS]` - L8 Saturation Vectors<br/>`L8H[_NITS]` - L8 Hue Vectors | *\<comma-separated list>*<br/>**Default:** `L1,L2,L2_MAX,L8T`                                        |
+| `FIX_CUTS_FIRST`<br/>*`--cuts-first`*        | Force first frame as scene-cut                                                                                                                                                                                                                                         | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
+| `FIX_CUTS_CONSEC`<br/>*`--cuts-consecutive`* | Consecutive scene-cuts fixing                                                                                                                                                                                                                                          | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
+| `CLEAN_FILENAMES`<br/>*`--clean-filenames`*  | Clean *output* filenames<br/>**Examples:**<br/>&nbsp;&nbsp;**•** *Show.S01E01.HDR* → *Show S01E01*<br/>&nbsp;&nbsp;**•** *A.Movie.2025.2160p.DV* → *A&nbsp;Movie*                                                                                                      | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
+| `SUBS_AUTODETECTION`<br/>*`--find-subs`*     | Additional subtitles auto-detection                                                                                                                                                                                                                                    | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
+| `TITLE_SHOWS_AUTO`<br/>*`--auto-title`*      | Generation of **TV shows** metadata title<br/>*(based on **input's filename**)*                                                                                                                                                                                        | `0` - disabled *(default)*<br/>`1` - enabled                                                         |
+| `TITLE_MOVIES_AUTO`<br/>*`--auto-title`*     | Generation of **movies** metadata title<br/>*(based on **input's filename**)*                                                                                                                                                                                          | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
+| `TRACK_NAMES_AUTO`<br/>*`--auto-tracks`*     | Generation of some metadata track names<br/>**Examples:**<br/>&nbsp;&nbsp;**• audio:** *TrueHD Atmos 7.1*<br/>&nbsp;&nbsp;**• subs:** *Polish*                                                                                                                         | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
+| `AUDIO_COPY_MODE`<br/>*`--copy-audio`*       | Input's audio tracks copy mode                                                                                                                                                                                                                                         | `1` - 1st track only<br/>`2` - 1st + compatibility if 1st is *TrueHD*<br/>`3` - all *(default)*<br/> |
+| `SUBS_COPY_MODE`<br/>*`--copy-subs`*         | Input's subtitle tracks copy mode                                                                                                                                                                                                                                      | `0` - none<br/>`1` - all *(default)*<br/>`<lng>` - ISO 639-2 lang code based                         |
+| `SUBS_LANG_CODES`<br/>*`--lang-codes`*       | Subtitle language ISO 639-2 codes to extract<br/>*(**subs** command only)*                                                                                                                                                                                             | *\<comma-separated ISO 639-2 codes>*<br/>**Default:** `all`                                          |
+| `EXTRACT_SHORT_SEC`                          | Sample duration in seconds<br/>*(related with **--sample** option)*                                                                                                                                                                                                    | *\<duration in seconds>*<br/>**Default:** `23`                                                       |
+| `FFMPEG_STRICT`                              | Controls FFmpeg experimental strict mode<br/>**Note:** Avoid using **untrusted inputs** if `1`                                                                                                                                                                         | `0` - disabled<br/>`1` - enabled *(default)*                                                         |
 
 ---
 
@@ -143,7 +143,7 @@ Options:
   -o, --output <OUTPUT>     Output file path [default: <print to console>]
   -u, --frames <F1[,...]>   Print RPU info for given frames
   -s, --sample [<SECONDS>]  Process only the first N seconds of input
-  -p, --plot <0|1|2|3>      Controls L1/L2 intermediate plotting
+  -p, --plot <P1[,...]>     Controls L1/L2/L8 intermediate plotting
 ```
 
 ### `plot` command
@@ -159,7 +159,7 @@ Options:
   -t, --input-type <TYPE>   Filter files by type in dir inputs
   -o, --output <OUTPUT>     Output file path [default: generated]
   -s, --sample [<SECONDS>]  Process only the first N seconds of input
-  -p, --plot <0|1|2|3>      Controls L1/L2 plotting [default: 3]
+  -p, --plot <P1[,...]>     Controls L1/L2/L8 plotting
 ```
 
 ### `frame-shift` command
@@ -187,7 +187,7 @@ Options:
   -o, --output <OUTPUT>      Output file path [default: generated]
   -f, --frame-shift <SHIFT>  Frame shift value [default: auto-calculated]
   -n, --info <0|1>           Controls intermediate info commands [default: 1]
-  -p, --plot <0|1|2|3>       Controls L1/L2 intermediate plotting [default: 3]
+  -p, --plot <P1[,...]>      Controls L1/L2/L8 intermediate plotting
 ```
 
 ### `fix` command
@@ -232,7 +232,7 @@ Options:
       --cuts-first <0|1>          Force first frame as scene-cut [default: 1]
       --cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: 1]
   -n, --info <0|1>                Controls intermediate info commands [default: 1]
-  -p, --plot <0|1|2|3>            Controls L1/L2 intermediate plotting [default: 3]
+  -p, --plot <P1[,...]>           Controls L1/L2/L8 intermediate plotting
 
 Options for .mkv / .mp4 output:
       --subs <FILE>               .srt subtitle file path to include
@@ -286,7 +286,7 @@ Options:
   -e, --output-format <FORMAT>  Output format [default: bin]
   -s, --sample [<SECONDS>]      Process only the first N seconds of input
   -n, --info <0|1>              Controls intermediate info commands [default: 1]
-  -p, --plot <0|1|2|3>          Controls L1/L2 intermediate plotting
+  -p, --plot <P1[,...]>         Controls L1/L2/L8 intermediate plotting
 ```
 
 ### `cuts` command

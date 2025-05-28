@@ -19,7 +19,7 @@ _remuxer_complete_path() {
 }
 
 _remuxer_complete() {
-  local cur prev cmd options values formats="mkv mp4 m2ts ts hevc bin" output_formats="mkv mp4 hevc bin"
+  local cur prev cmd options values all_values value formats="mkv mp4 m2ts ts hevc bin" output_formats="mkv mp4 hevc bin"
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD - 1]}"
@@ -54,12 +54,27 @@ _remuxer_complete() {
   -t | --input-type) values="shows movies" ;;
   -l | --rpu-levels) values="1 2 3 4 5 6 8 9 10 11 254 255" ;;
   -[nm] | --info | --clean-filenames | --find-subs | --auto-title | --auto-tracks | --cuts-first | --cuts-consecutive) values="0 1" ;;
-  -p | --plot) values="0 1 2 3" ;;
+  -p | --plot) all_values="0 1 none all L1 L2 L2_100 L2_600 L2_1000 L2_MAX L8T L8T_100 L8T_600 L8T_1000 L8T_MAX L8S L8S_100 L8S_600 L8S_1000 L8S_MAX L8H L8H_100 L8H_600 L8H_1000 L8H_MAX" ;;
   -c | --lang-codes) values="pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-subs) values="0 1 pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-audio) values="1 2 3" ;;
   -[fuk] | --frame-shift | --title | --frames | --time | --l5 | --cuts-clear) return ;;
   esac
+
+  if [[ -n "$all_values" ]]; then
+    local cur_lower="${cur,,}"
+    local last="${cur_lower##*,}" currents=" ${cur_lower//,/ } "
+    [[ "$cur" == *,* ]] && previous="${cur%,*},"
+
+    for value in $all_values; do
+      [[ -n "$last" && "${value,,}" != "$last"* ]] && continue
+      [[ "$currents" == *" ${value,,} "* ]] && continue
+      values+="$previous$value "
+    done
+
+    mapfile -t COMPREPLY < <(compgen -W "$values")
+    return
+  fi
 
   if [[ -n "$values" ]]; then
     mapfile -t COMPREPLY < <(compgen -W "$values" -- "$cur")
