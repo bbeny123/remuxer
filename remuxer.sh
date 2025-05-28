@@ -23,7 +23,7 @@ PLOTS_DIR=""                     # <empty> - same as OUT_DIR
 TMP_DIR="$(pwd)/temp$START_TIME" # caution: This dir will be removed only if it is created by the script
 RPU_LEVELS="3,8,9,11,254"
 INFO_INTERMEDIATE='1'  # 0 - disabled,       1 - enabled
-PLOT_INTERMEDIATE='L1,L2,L2_MAX,L8T' # all,none,L1,L2,L2_600,L2_1000,L2_MAX,L8T,L8T_600,L8T_1000,L8T_MAX,L8S,L8S_600,L8S_1000,L8S_MAX,L8S,L8S_600,L8S_1000,L8S_MAX
+PLOT_DEFAULT='L1,L2,L2_MAX,L8T' # all,none,L1,L2,L2_600,L2_1000,L2_MAX,L8T,L8T_600,L8T_1000,L8T_MAX,L8S,L8S_600,L8S_1000,L8S_MAX,L8S,L8S_600,L8S_1000,L8S_MAX
 FIX_CUTS_FIRST='1'     # 0 - disabled,       1 - enabled
 FIX_CUTS_CONSEC='1'    # 0 - disabled,       1 - enabled
 CLEAN_FILENAMES='1'    # 0 - disabled,       1 - enabled
@@ -33,7 +33,7 @@ TITLE_MOVIES_AUTO='1'  # 0 - disabled,       1 - enabled
 TRACK_NAMES_AUTO='1'   # 0 - disabled,       1 - enabled [e.g., audio: DTS 5.1, subs: Polish]
 AUDIO_COPY_MODE='3'    # 1 - 1st track only, 2 - 1st + compatibility, 3 - all
 SUBS_COPY_MODE='1'     # 0 - none,           1 - all,                 <lng> - based on ISO 639-2 lang code [e.g., eng]
-SUBS_LANG_CODES=''     # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
+SUBS_LANG_CODES='pol'  # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
 EXTRACT_SHORT_SEC='23'
 FFMPEG_STRICT=1        # 0 - disabled,       1 - enabled
 
@@ -444,7 +444,7 @@ plot_max_target() {
 }
 
 plot() {
-  local input="$1" short_sample="$2" verbose="$3" summary="$4" output="$5" direct="$6" plots="$PLOT_INTERMEDIATE"
+  local input="$1" short_sample="$2" verbose="$3" summary="$4" output="$5" direct="$6" plots="$PLOT_DEFAULT"
   local rpu input_name title l2_trims l8_trims cm4
 
   if [[ -z "$plots" || " $plots " =~ [[:space:]](0|none)[[:space:]] ]]; then
@@ -836,10 +836,10 @@ fix_rpu() {
   log_t "RPU: '%s' fixed successfully - output: '%s'" "$rpu_name" "$(basename "$output")"
 
   if [[ "$quiet" != 1 && "$INFO_INTERMEDIATE" = 1 ]]; then
-    plot="$PLOT_INTERMEDIATE" && PLOT_INTERMEDIATE=0
+    plot="$PLOT_DEFAULT" && PLOT_DEFAULT=0
     info "$input_rpu" >&2
     info "$output" >&2
-    PLOT_INTERMEDIATE="$plot"
+    PLOT_DEFAULT="$plot"
   fi
 
   echo "$output"
@@ -1484,7 +1484,7 @@ help() {
   [[ "$cmd_options" == *b* ]] && b=1
   [[ "$cmd_options" == *t* ]] && t=1 && multiple_inputs='[ignored when multiple inputs]'
   [[ "$cmd_options" == *q* ]] && q=1
-  [[ "$cmd" != 'plot' && "$cmd_options" == *s* && "${PLOT_INTERMEDIATE,,}" != "none" && "$PLOT_INTERMEDIATE" != 0 ]] && s=1
+  [[ "$cmd" != 'plot' && "$cmd_options" == *s* && "${PLOT_DEFAULT,,}" != "none" && "$PLOT_DEFAULT" != 0 ]] && s=1
   [[ "$formats" == *bin* ]] && bin=1
   [ "$cmd" = 'extract' ] && default_output_format='bin'
   [ "$cmd" != 'plot' ] && i=1
@@ -1545,7 +1545,7 @@ help() {
   help1 'j' "--json-examples             Show examples for $B--json$N option"
   help1 "-n, --info <0|1>                Controls intermediate info commands [default: $B$INFO_INTERMEDIATE$N]"
   help1 "-p, --plot <P1[,...]>           Controls L1/L2/L8${i:+" intermediate"} plotting
-                                         [default: $B$PLOT_INTERMEDIATE$N${s:+" (${B}none$N if $B--sample$N$default_plot_info)"}]
+                                         [default: $B$PLOT_DEFAULT$N${s:+" (${B}none$N if $B--sample$N$default_plot_info)"}]
                                          Allowed values:
                                          $B- 0 / none$N
                                          $B- 1 / all$N
@@ -1876,7 +1876,7 @@ parse_args() {
   [[ -n "$sample_duration" ]] && EXTRACT_SHORT_SEC="$sample_duration"
   [[ -n "$rpu_levels" ]] && RPU_LEVELS=$(deduplicate_list "$rpu_levels" 1)
   [[ -n "$info" ]] && INFO_INTERMEDIATE="$info"
-  [[ -n "$plot" ]] && PLOT_INTERMEDIATE=$(deduplicate_list "$plot") && explicit_plot=1
+  [[ -n "$plot" ]] && PLOT_DEFAULT=$(deduplicate_list "$plot") && explicit_plot=1
   [[ -n "$cuts_first" ]] && FIX_CUTS_FIRST="$cuts_first"
   [[ -n "$cuts_consecutive" ]] && FIX_CUTS_CONSEC="$cuts_consecutive"
   [[ -n "$find_subs" ]] && SUBS_AUTODETECTION="$find_subs"
@@ -1889,7 +1889,7 @@ parse_args() {
   [[ -n "$frames" ]] && frames="$(deduplicate_list "$frames" 1)"
   [[ -n "$timestamps" ]] && timestamps="$(deduplicate_list "$timestamps")"
 
-  PLOT_INTERMEDIATE="${PLOT_INTERMEDIATE,,}" && PLOT_INTERMEDIATE="${PLOT_INTERMEDIATE//,/ }"
+  PLOT_DEFAULT="${PLOT_DEFAULT,,}" && PLOT_DEFAULT="${PLOT_DEFAULT//,/ }"
 
   tmp_trap
 
