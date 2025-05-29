@@ -13,6 +13,7 @@
     - New option: `--raw-rpu` – injects input RPU (without making hybrid RPU)
 - `extract` **command:**
     - Added support for extracting `.hevc` _base layer_
+    - Added support for converting to **ProRes** (`.mov`)
 - `plot` **command:**
     - Added support for plotting **L2** and **L8 metadata**
 - Increased max tested offset during frame shift calculation

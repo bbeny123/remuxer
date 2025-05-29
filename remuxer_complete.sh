@@ -31,7 +31,7 @@ _remuxer_complete() {
   fi
 
   case "$cmd" in
-  extract) formats="mkv mp4 m2ts ts hevc" && output_formats="hevc bin" ;;
+  extract) formats="mkv mp4 m2ts ts hevc" && output_formats="hevc bin mov" ;;
   remux | png | mp3) formats="mkv mp4 m2ts ts" && output_formats="mkv mp4" ;;
   subs) formats="mkv" && output_formats="srt" ;;
   esac
@@ -58,6 +58,7 @@ _remuxer_complete() {
   -c | --lang-codes) values="pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-subs) values="0 1 pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-audio) values="1 2 3" ;;
+  --prores-profile) values="0 1 2 3 4 5" ;;
   -[fuk] | --frame-shift | --title | --frames | --time | --l5 | --cuts-clear) return ;;
   esac
 
@@ -93,7 +94,7 @@ _remuxer_complete() {
   fix) options="--formats --input-type --output --info --l5 --cuts-clear --cuts-first --cuts-consecutive --json --json-examples" ;;
   inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames --l5 --cuts-clear --cuts-first --cuts-consecutive" ;;
   remux) options="--formats --input-type --output --output-format --subs --find-subs --copy-subs --copy-audio --hevc --title --auto-title --auto-tracks --clean-filenames" ;;
-  extract) options="--formats --input-type --output --output-format --sample --info --plot" ;;
+  extract) options="--formats --input-type --output --output-format --sample --prores-profile --info --plot" ;;
   cuts) options="--formats --input-type --output --sample" ;;
   subs) options="--input-type --output --lang-codes --clean-filenames" ;;
   png) options="--formats --input-type --output --time" ;;

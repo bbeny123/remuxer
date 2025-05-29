@@ -10,14 +10,14 @@ readonly START_TIME=$(date +%s%1N)
 readonly DEBUG_LOG='0'
 readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/tools"
 
-alias jq="'$TOOLS_DIR/jq-win64.exe'"                                       # v1.7.1: https://jqlang.org/download/
-alias mediainfo="'$TOOLS_DIR/MediaInfo.exe'"                               # v25.04: https://mediaarea.net/pl/MediaInfo/Download
-alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel error" # v7.1.1: https://ffmpeg.org/download.html
-alias mkvmerge="'$TOOLS_DIR/mkvtoolnix/mkvmerge.exe'"                      # v92.0: https://mkvtoolnix.download/downloads.html
-alias mkvextract="'$TOOLS_DIR/mkvtoolnix/mkvextract.exe'"                  #
-alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                               # v2.2.0: https://github.com/quietvoid/dovi_tool/releases
-alias dovi_tool_cmv4="'$TOOLS_DIR/dovi_tool_cmv4.exe'"                     # Modified dovi_tool 2.2.0 supporting allow_cmv4_transfer,
-                                                                           # L2 plotting, and extended RPU info output
+alias jq="'$TOOLS_DIR/jq-win64.exe'"                                         # v1.7.1: https://jqlang.org/download/
+alias mediainfo="'$TOOLS_DIR/MediaInfo.exe'"                                 # v25.04: https://mediaarea.net/pl/MediaInfo/Download
+alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel warning" # v7.1.1: https://ffmpeg.org/download.html
+alias mkvmerge="'$TOOLS_DIR/mkvtoolnix/mkvmerge.exe'"                        # v92.0: https://mkvtoolnix.download/downloads.html
+alias mkvextract="'$TOOLS_DIR/mkvtoolnix/mkvextract.exe'"                    #
+alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                                 # v2.2.0: https://github.com/quietvoid/dovi_tool/releases
+alias dovi_tool_cmv4="'$TOOLS_DIR/dovi_tool_cmv4.exe'"                       # Modified dovi_tool 2.2.0 supporting allow_cmv4_transfer,
+                                                                             # L2 plotting, and extended RPU info output
 OUT_DIR="$(pwd)"
 PLOTS_DIR=""                     # <empty> - same as OUT_DIR
 TMP_DIR="$(pwd)/temp$START_TIME" # caution: This dir will be removed only if it is created by the script
@@ -36,26 +36,29 @@ SUBS_COPY_MODE='1'     # 0 - none,           1 - all,                 <lng> - ba
 SUBS_LANG_CODES='pol'  # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
 EXTRACT_SHORT_SEC='23'
 FFMPEG_STRICT=1        # 0 - disabled,       1 - enabled
+PRORES_PROFILE='3'
+PRORES_MACOS='2'
 
 declare -A commands=(
-  [info]="       Show Dolby Vision information            | xtospu      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [plot]="       Plot L1/L2 metadata                      | xtosp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [frame-shift]="Calculate frame shift                    | b           | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [sync]="       Synchronize Dolby Vision RPU files       | bofnp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [fix]="        Fix or adjust Dolby Vision RPU(s)        | xtojnF      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [inject]="     Sync & Inject Dolby Vision RPU           | boeqflwnmpF | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [remux]="      Remux video file(s)                      | xtoemr      | .mkv, .mp4, .m2ts, .ts"
-  [extract]="    Extract DV RPU(s) or .hevc base layer(s) | xtosenp     | .mkv, .mp4, .m2ts, .ts, .hevc"
-  [cuts]="       Extract scene-cut frame list(s)          | xtos        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [subs]="       Extract .srt subtitles                   | tocm        | .mkv"
-  [png]="        Extract video frame(s) as PNG image(s)   | xtok        | .mkv, .mp4, .m2ts, .ts"
-  [mp3]="        Extract audio track(s) as MP3 file(s)    | xtos        | .mkv, .mp4, .m2ts, .ts"
+  [info]="       Show Dolby Vision information                         | xtospu      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="       Plot L1/L2 metadata                                   | xtosp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [frame-shift]="Calculate frame shift                                 | b           | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [sync]="       Synchronize Dolby Vision RPU files                    | bofnp       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [fix]="        Fix or adjust Dolby Vision RPU(s)                     | xtojnF      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [inject]="     Sync & Inject Dolby Vision RPU                        | boeqflwnmpF | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [remux]="      Remux video file(s)                                   | xtoemr      | .mkv, .mp4, .m2ts, .ts"
+  [extract]="    Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpP    | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [cuts]="       Extract scene-cut frame list(s)                       | xtos        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [subs]="       Extract .srt subtitles                                | tocm        | .mkv"
+  [png]="        Extract video frame(s) as PNG image(s)                | xtok        | .mkv, .mp4, .m2ts, .ts"
+  [mp3]="        Extract audio track(s) as MP3 file(s)                 | xtos        | .mkv, .mp4, .m2ts, .ts"
 )
 declare -A cmd_description=(
   [plot]="Plot L1 dynamic brightness and L2 trims metadata"
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
   [sync]="Synchronize RPU of <input> to align with RPU of <base-input>"
   [inject]="Sync & Inject RPU of <input> into <base-input>"
+  [extract]="Extract DV RPU(s) or .hevc base layer(s), or convert to ProRes (.mov)"
 )
 declare -i help_short=0 help_left=15
 cmd_options=""
@@ -88,7 +91,7 @@ cmd_info() {
 }
 
 cmd_output_formats() {
-  [ "$1" = 'extract' ] && echo "hevc, bin" && return
+  [ "$1" = 'extract' ] && echo "hevc, bin, mov" && return
 
   local allowed_formats=$(cmd_info "$1" 3)
   allowed_formats=" ${allowed_formats//./},"
@@ -265,6 +268,46 @@ rpu_frames() {
   dovi_tool info -s "$input" | grep -oE 'Frames:\s*[0-9]+' | grep -oE '[0-9]+'
 }
 
+to_prores() {
+  local input="$1" short_sample="$2" output="$3" prefix='PRORES' type='ProRes' ffmpeg_cmd=()
+
+  file_exists "$input" 'input' 1
+  if check_extension "$input" ".mov"; then
+    [ "$short_sample" = 1 ] && log_kill "Extracting ProRes sample from a ProRes file is not supported (input: '$input')" 2
+    echo "$input" && return
+  fi
+  check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc' 1
+
+  [ "$short_sample" = 1 ] && type+=" sample" && prefix+="-${EXTRACT_SHORT_SEC}s"
+  output=$(out_file "$input" 'mov' "$prefix" "$output")
+
+  local -r input_name=$(basename "$input")
+  log_t "Encoding '%s' to %s ..." "$input_name" "$type"
+
+  if [[ ! -f "$output" ]]; then
+    if ffmpeg -encoders 2>&1 | grep -q prores_videotoolbox; then
+      ffmpeg_cmd+=(-c:v prores_videotoolbox -profile:v "$PRORES_MACOS")
+    else
+      ffmpeg_cmd+=(-c:v prores_ks -profile:v "$PRORES_PROFILE" -qscale:v 4 -vendor apl0 -pix_fmt yuv422p10le)
+    fi
+    [ "$short_sample" = 1 ] && ffmpeg_cmd+=(-t "$EXTRACT_SHORT_SEC")
+
+    if ! ffmpeg -loglevel info -i "$input" 2>&1 | grep -q 'Video.*p11le(tv, bt2020nc/bt2020/smpte2084)'; then
+      logf "%s '%s' is not HDR10, default color primaries (yuv420p10le/bt2020nc/bt2020/smpte2084) may be wrong - check input" "$(yellow 'Warning:')" "$input_name"
+    fi
+
+    if ! ffmpeg -i "$input" -map 0:v:0 -map_chapters -1 "${ffmpeg_cmd[@]}" -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an "$output" >&2; then
+      log_kill "$(red 'Error:') Failed to encode '$input' to $type"
+    fi
+
+    log_t "Successfully encoded '%s' to %s - output file: '%s'" "$input_name" "$type" "$output"
+  else
+    logf "The ProRes file: '%s' already exists, skipping..." "$output"
+  fi
+
+  echo "$output"
+}
+
 to_hevc() {
   local input="$1" short_sample="$2" output="$3" out_dir="$4" prefix='HEVC' type='Base layer' ffmpeg_cmd=()
 
@@ -287,7 +330,7 @@ to_hevc() {
   log "Extracting ${type,,} for: '$input_name' ..." 1
 
   if [[ ! -f "$output" ]]; then
-    ffmpeg -i "$input" -map 0:0 -c copy "${ffmpeg_cmd[@]}" -f hevc "$output" >&2
+    ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc "$output" >&2
     log "$type for: '$input_name' extracted - output file: '$output'" 1
   else
     log "The .hevc file: '$output' already exists, skipping..."
@@ -323,7 +366,7 @@ to_rpu() {
     if [ "$short_sample" != 1 ] && check_extension "$input" ".hevc"; then
       dovi_tool extract-rpu -o "$output" "$input" >/dev/null
     else
-      if ! ffmpeg -i "$input" -map 0:0 -c copy "${ffmpeg_cmd[@]}" -f hevc - | dovi_tool extract-rpu -o "$output" - >/dev/null; then
+      if ! ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc - | dovi_tool extract-rpu -o "$output" - >/dev/null; then
         log_kill "Error while extracting $type for: '$input_name'"
       fi
     fi
@@ -344,6 +387,8 @@ extract() {
 
   if [[ "${output_format,,}" == *hevc* ]]; then
     to_hevc "$input" "$short_sample" "$output" 1 >/dev/null
+  elif [[ "${output_format,,}" == *mov* ]]; then
+    to_prores "$input" "$short_sample" "$output" 1 >/dev/null
   else
     to_rpu "$input" "$short_sample" 0 "$output" 1 "$INFO_INTERMEDIATE" >/dev/null
   fi
@@ -1494,6 +1539,7 @@ help() {
   *F*) help_left+=17 ;;
   *e*) help_left+=15 ;;
   *[lcm]*) help_left+=14 ;;
+  *P*) help_left+=13 ;;
   *f*) help_left+=12 ;;
   *[bxs]*) help_left+=11 ;;
   *[tku]*) help_left+=10 ;;
@@ -1527,6 +1573,8 @@ help() {
   help1 "-s, --sample [<SECONDS>]        Process only the first N seconds of input
                                          [default sample duration: $B${EXTRACT_SHORT_SEC}s$N]
                                          ${bin:+"[ignored for $B.bin$N inputs]"}"
+  help1 'P' "--prores-profile <0-5>      Controls ProRes encoding profile (${B}0$N = Proxy, ${B}5$N = 4444 XQ)
+                                         [default: $B$PRORES_PROFILE$N (macOS: $B$PRORES_MACOS$N)]"
   help1 "-q, --skip-sync                 Skip RPUs sync (assumes RPUs are already in sync)"
   help1 "-f, --frame-shift <SHIFT>       Frame shift value [default: ${B}auto-calculated$N]
                                          ${q:+"[ignored when $B--skip-sync$N]"}"
@@ -1799,7 +1847,7 @@ parse_args() {
 
   local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir sample_duration
   local frames frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto timestamps
-  local l5 cuts_clear cuts_first cuts_consecutive json
+  local l5 cuts_clear cuts_first cuts_consecutive json prores_profile
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1828,6 +1876,7 @@ parse_args() {
     -c | --lang-codes)           lang_codes=$(parse_option "$2" "$lang_codes" "$cmd" "$1" 'c' '<ISO 639-2 lang codes>' '[a-z]{3}' 1) ;;
     -m | --clean-filenames) clean_filenames=$(parse_option "$2" "$clean_filenames" "$cmd" "$1" 'm' '0, 1') ;;
     -r | --hevc)                       hevc=$(parse_file "$2" "$hevc" "$cmd" "$1" 'r' '.hevc') ;;
+    --prores-profile)        prores_profile=$(parse_option "$2" "$prores_profile" "$cmd" "$1" 'P' '0, 1, 2, 3, 4, 5') ;;
     --l5)                                l5=$(parse_option "$2" "$l5" "$cmd" "$1" 'F' '<offset>' '[0-9]+' 1 '2|4') ;;
     --cuts-clear)                cuts_clear=$(parse_option "$2" "$cuts_clear" "$cmd" "$1" 'F' '<frame-range>' '[0-9]+(-[0-9]+)?' 1) ;;
     --cuts-first)                cuts_first=$(parse_option "$2" "$cuts_first" "$cmd" "$1" 'F' '0, 1') ;;
@@ -1888,6 +1937,7 @@ parse_args() {
   [[ -n "$clean_filenames" || -n "$output" ]] && CLEAN_FILENAMES="${clean_filenames:-0}"
   [[ -n "$frames" ]] && frames="$(deduplicate_list "$frames" 1)"
   [[ -n "$timestamps" ]] && timestamps="$(deduplicate_list "$timestamps")"
+  [[ -n "$prores_profile" ]] && PRORES_PROFILE="$prores_profile" && PRORES_MACOS="$prores_profile"
 
   PLOT_DEFAULT="${PLOT_DEFAULT,,}" && PLOT_DEFAULT="${PLOT_DEFAULT//,/ }"
 
