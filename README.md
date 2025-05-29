@@ -33,7 +33,7 @@ All required external tools must be downloaded and placed in the directory speci
     - `mkvextract.exe`
 - [`dovi_tool`](https://github.com/quietvoid/dovi_tool/releases) (v2.2.0+)
     - A **custom build** of `dovi_tool` v2.2.0+ is available here: [bbeny123/dovi_tool](https://github.com/bbeny123/dovi_tool/releases)
-    > **Note:** `v2.2.0+` is not officially released at the moment
+      > **Note:** `v2.2.0+` is not officially released at the moment
 
 > The versions listed above are those with which `remuxer` was tested.  
 > Other versions may work, but compatibility is not guaranteed.
