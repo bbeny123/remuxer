@@ -15,9 +15,10 @@ alias mediainfo="'$TOOLS_DIR/MediaInfo.exe'"                                 # v
 alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel warning" # v7.1.1: https://ffmpeg.org/download.html
 alias mkvmerge="'$TOOLS_DIR/mkvtoolnix/mkvmerge.exe'"                        # v92.0: https://mkvtoolnix.download/downloads.html
 alias mkvextract="'$TOOLS_DIR/mkvtoolnix/mkvextract.exe'"                    #
-alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                                 # v2.2.0: https://github.com/quietvoid/dovi_tool/releases
-alias dovi_tool_cmv4="'$TOOLS_DIR/dovi_tool_cmv4.exe'"                       # Modified dovi_tool 2.2.0 supporting allow_cmv4_transfer,
-                                                                             # L2 plotting, and extended RPU info output
+alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                                 # Modified dovi_tool 2.2.0+ supporting L2/L8 plotting, and extended RPU info output
+                                                                             # https://github.com/bbeny123/dovi_tool/releases
+                                                                             # https://github.com/quietvoid/dovi_tool/releases
+
 OUT_DIR="$(pwd)"
 PLOTS_DIR=""                     # <empty> - same as OUT_DIR
 TMP_DIR="$(pwd)/temp$START_TIME" # caution: This dir will be removed only if it is created by the script
@@ -443,7 +444,7 @@ plot_level_nits() {
   log_t "Plotting %s metadata for: '%s' ..." "$subtitle" "$input_name"
 
   if [[ ! -f "$output" ]]; then
-    if dovi_tool_cmv4 plot -i "$rpu" -o "$output" -t "$subtitle – $title" "${l2_option[@]}" >/dev/null; then
+    if dovi_tool plot -i "$rpu" -o "$output" -t "$subtitle – $title" "${l2_option[@]}" >/dev/null; then
       logf "%s metadata for: '%s' plotted - output file: '%s'" "$subtitle" "$input_name" "$output"
     else
       log_b "$(red 'Error:') Failed to plot %s metadata for '%s' , skipping..." "$subtitle" "$input_name"
@@ -503,7 +504,7 @@ plot() {
   [[ " $plots " =~ [[:space:]](1|all)[[:space:]] ]] && plots="lx"
 
   if [[ "$plots" =~ lx|l2|l8 ]]; then
-    [ -z "$summary" ] && summary=$(dovi_tool_cmv4 info -s "$rpu" 2>&1)
+    [ -z "$summary" ] && summary=$(dovi_tool info -s "$rpu" 2>&1)
 
     [[ "$plots" =~ lx|l2 ]] && l2_trims=$(grep -i 'L2 trims' <<<"$summary")
     [[ "$plots" == *l2_max* ]] && plots="${plots//l2_max/"$(plot_max_target "$l2_trims" "l2_")"}"
@@ -630,7 +631,7 @@ info_summary() {
   local input="$1" short_sample="$2" summary dv_profile base_layer resolution lossless_audio cuts_zero cuts_cons cuts_end_cons
   local -r rpu=$(to_rpu "$input" "$short_sample")
 
-  summary=$(dovi_tool_cmv4 info -s "$rpu" | grep -E '^ ')
+  summary=$(dovi_tool info -s "$rpu" | grep -E '^ ')
   summary=${summary//"top=0,"/"top=$(yellow 0),"}
   summary=${summary//"bottom=0,"/"bottom=$(yellow 0),"}
   summary=${summary//"N/A"/"$(yellow 'N/A')"}
@@ -1103,7 +1104,7 @@ inject_rpu() {
     rpu_synced=$(windows_safe_path "$rpu_synced")
     echo "{ $cmv40_transferable \"source_rpu\": \"$rpu_synced\", \"rpu_levels\": [$RPU_LEVELS] }" >"$transfer_config"
 
-    if ! dovi_tool_cmv4 editor -i "$rpu_base" -j "$transfer_config" -o "$rpu_injected" >&2; then
+    if ! dovi_tool editor -i "$rpu_base" -j "$transfer_config" -o "$rpu_injected" >&2; then
       log_kill "Error while injecting RPU levels: $RPU_LEVELS of '$(basename "$rpu_synced")' into '$(basename "$rpu_base")'" 1
     fi
 

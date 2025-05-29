@@ -31,13 +31,9 @@ All required external tools must be downloaded and placed in the directory speci
 - [`mkvtoolnix`](https://mkvtoolnix.download/downloads.html) (v92.0)
     - `mkvmerge.exe`
     - `mkvextract.exe`
-- [`dovi_tool`](https://github.com/quietvoid/dovi_tool/releases) (v2.2.0)
-- `dovi_tool` v2.2.0+ — with `allow_cmv4_transfer` support (required by `inject` command):
-    - A **modified build** of `dovi_tool` v2.2.0 is **included** in this
-      repository: [tools/dovi_tool_cmv4.exe](tools/dovi_tool_cmv4.exe)
-      > This custom version supports L2 metadata plotting and extends summary info.  
-      > Source: [bbeny123/dovi_tool](https://github.com/bbeny123/dovi_tool)  
-      > License: [tools/LICENSE-dovi_tool_cmv4](tools/LICENSE-dovi_tool_cmv4) (thanks ***@quietvoid***)
+- [`dovi_tool`](https://github.com/quietvoid/dovi_tool/releases) (v2.2.0+)
+    - A **custom build** of `dovi_tool` v2.2.0+ is available here: [bbeny123/dovi_tool](https://github.com/bbeny123/dovi_tool/releases)
+    > **Note:** `v2.2.0+` is not officially released at the moment
 
 > The versions listed above are those with which `remuxer` was tested.  
 > Other versions may work, but compatibility is not guaranteed.
