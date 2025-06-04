@@ -147,7 +147,7 @@ Options:
 
 ### `plot` command
 
-**Description:** Plot **L1** dynamic brightness and **L2** trims metadata
+**Description:** Plot **L1/L2/L8** metadata
 
 ```bash
 Usage: remuxer plot [OPTIONS] [INPUT...]
@@ -215,7 +215,7 @@ Options:
 **Description:** Generate *Dolby Vision P8 RPU* for *HDR10* video(s)
 
 ```bash
-Usage: remuxer fix [OPTIONS] [INPUT...]
+Usage: remuxer generate [OPTIONS] [INPUT...]
 
 Options:
   -i, --input <INPUT>             Input file/dir path [can be used multiple times]

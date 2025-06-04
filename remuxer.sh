@@ -42,7 +42,7 @@ EXTRACT_SHORT_SEC='23'
 
 declare -A commands=(
   [info]="       Show Dolby Vision information                         | xtospu       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [plot]="       Plot L1/L2 metadata                                   | xtosp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="       Plot L1/L2/L8 metadata                                | xtosp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [frame-shift]="Calculate frame shift                                 | b            | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [sync]="       Synchronize Dolby Vision RPU files                    | bofnp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [fix]="        Fix or adjust Dolby Vision RPU(s)                     | xtojnFH      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
@@ -56,7 +56,6 @@ declare -A commands=(
   [mp3]="        Extract audio track(s) as MP3 file(s)                 | xtos         | .mkv, .mp4, .m2ts, .ts"
 )
 declare -A cmd_description=(
-  [plot]="Plot L1 dynamic brightness and L2 trims metadata"
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
   [sync]="Synchronize RPU of <input> to align with RPU of <base-input>"
   [inject]="Sync & Inject RPU of <input> into <base-input>"
