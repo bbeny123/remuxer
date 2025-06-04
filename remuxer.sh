@@ -34,11 +34,11 @@ TRACK_NAMES_AUTO='1'            # 0 - disabled,       1 - enabled [e.g., audio: 
 AUDIO_COPY_MODE='3'             # 1 - 1st track only, 2 - 1st + compatibility, 3 - all
 SUBS_COPY_MODE='1'              # 0 - none,           1 - all,                 <lng> - based on ISO 639-2 lang code [e.g., eng]
 SUBS_LANG_CODES='pol'           # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
-EXTRACT_SHORT_SEC='23'
 L1_TUNING='balanced'            # 0 - legacy,         1 - most,   2 - more,    3 - balanced,    4 - less,     5 - least
 FFMPEG_STRICT=1                 # 0 - disabled,       1 - enabled
 PRORES_PROFILE='3'
 PRORES_MACOS='2'
+EXTRACT_SHORT_SEC='23'
 
 declare -A commands=(
   [info]="       Show Dolby Vision information                         | xtospu       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
@@ -954,7 +954,7 @@ mdl_fps_l6() {
 
     [[ "$info_mdl" == *'2020'* ]] && ((mdl++))
 
-    if (( mdl > 6 )); then
+    if ((mdl > 6)); then
       logf "Detected input MDL: %s" "$mdl"
     else
       logf "%s Failed to auto-detect MDL, skipping..." "$(yellow 'Warning:')" && return
@@ -1023,13 +1023,13 @@ fix_scene_cuts() {
 
   if [ "$(rpu_cuts_line "$scene_cuts" 1)" != 0 ]; then
     cuts_temp=$(tmp_file "$input" 'txt' 'CUTS-tmp')
-    { echo "0"; cat "$scene_cuts"; } > "$cuts_temp" && mv "$cuts_temp" "$cuts_output" && scene_cuts="$cuts_output"
+    { echo "0"; cat "$scene_cuts"; } >"$cuts_temp" && mv "$cuts_temp" "$cuts_output" && scene_cuts="$cuts_output"
   fi
 
   frames=$(mediainfo "$prores" --Inform="Video;%FrameCount%" | tr -d '\r')
   if [[ -n "$frames" && "$(rpu_cuts_line "$scene_cuts" -1)" -lt "$frames" ]]; then
     [[ ! "$scene_cuts" -ef "$cuts_output" ]] && cp "$scene_cuts" "$cuts_output" && scene_cuts="$cuts_output"
-    echo "$frames" >> "$cuts_output"
+    echo "$frames" >>"$cuts_output"
   fi
 
   echo "$scene_cuts"
@@ -1041,7 +1041,7 @@ generate_variable_l5() {
 
   while read -r from; do
     cuts[from]=1
-  done < "$scene_cuts"
+  done <"$scene_cuts"
 
   while IFS=',' read -r id l5; do
     presets[id]="$l5"
@@ -1055,7 +1055,7 @@ generate_variable_l5() {
 
   while IFS='-' read -r from to; do
     [[ ! -v cuts[from] ]] && log_kill "$(red 'Error:') Variable L5 ranges must start at a valid scene-cut; invalid range start: '$from'" 2
-    [[ ! -v cuts[$((to+1))] ]] && log_kill "$(red 'Error:') Variable L5 ranges must end just before a scene-cut; invalid range end: '$to'" 2
+    [[ ! -v cuts[$((to + 1))] ]] && log_kill "$(red 'Error:') Variable L5 ranges must end just before a scene-cut; invalid range end: '$to'" 2
   done < <(echo "$edits" | cut -d' ' -f1)
 
   cuts_dynamic=$(tmp_file "$input" 'txt' 'CUTS-dynamic') && cp "$scene_cuts" "$cuts_dynamic"
@@ -1065,7 +1065,7 @@ generate_variable_l5() {
 
   while read -r range id; do
     from=${range%-*}
-    read -ra l5 <<< "${presets["$id"]}"
+    read -ra l5 <<<"${presets["$id"]}"
     sed -i "/^$from$/,\$!d" "$cuts_dynamic"
 
     if ! cm_analyze -s "$cuts_dynamic" -m "$mdl" -r "$fps" --source-format "pq bt2020" -f "$range" --letterbox "${l5[@]}" --analysis-tuning "$L1_TUNING" "$prores" "$xml_tmp"; then
@@ -1075,13 +1075,13 @@ generate_variable_l5() {
     if ((i++ == 0)); then
       mv "$xml_tmp" "$xml_first"
     else
-      awk '/<Shot>/ && !s {s=NR} /<\/Shot>/ {e=NR} {l[NR]=$0} END {for(i=s;i<=e;i++) print l[i]}' "$xml_tmp" >> "$xml_mid"
+      awk '/<Shot>/ && !s {s=NR} /<\/Shot>/ {e=NR} {l[NR]=$0} END {for(i=s;i<=e;i++) print l[i]}' "$xml_tmp" >>"$xml_mid"
     fi
-  done <<< "$edits"
+  done <<<"$edits"
 
-  awk '/<\/Shot>/ {last=NR} {line[NR]=$0} END {for(i=1;i<=last;i++) print line[i]}' "$xml_first" > "$xml"
-  cat "$xml_mid" >> "$xml"
-  awk '/<\/Shot>/ {last=NR} {line[NR]=$0} END {for(i=last+1;i<=NR;i++) print line[i]}' "$xml_first" >> "$xml"
+  awk '/<\/Shot>/ {last=NR} {line[NR]=$0} END {for(i=1;i<=last;i++) print line[i]}' "$xml_first" >"$xml"
+  cat "$xml_mid" >>"$xml"
+  awk '/<\/Shot>/ {last=NR} {line[NR]=$0} END {for(i=last+1;i<=NR;i++) print line[i]}' "$xml_first" >>"$xml"
 }
 
 generate() {
@@ -1109,13 +1109,13 @@ generate() {
     if [ -n "$l5_config" ]; then
       ! generate_variable_l5 "$prores" "$scene_cuts" "$mdl" "$fps" "$l5_config" "$xml" && return
     else
-      IFS=',' read -r l5_top l5_bottom l5_left l5_right <<< "$l5"
+      IFS=',' read -r l5_top l5_bottom l5_left l5_right <<<"$l5"
       if ! cm_analyze -s "$scene_cuts" -m "$mdl" -r "$fps" --source-format "pq bt2020" --letterbox "${l5_left:-0}" "${l5_right:-0}" "${l5_top:-0}" "${l5_bottom:-0}" --analysis-tuning "$L1_TUNING" "$prores" "$xml"; then
         log_t "%s Failed to generate DV P8 RPU xml, skipping..." "$(red 'Error:')" && return
       fi
     fi
   else
-   logf "Generated RPU xml file '%s' already exists, skipping..." "$(basename "$xml")"
+    logf "Generated RPU xml file '%s' already exists, skipping..." "$(basename "$xml")"
   fi
 
   if ! dovi_tool generate --xml "$xml" -o "$output"; then
