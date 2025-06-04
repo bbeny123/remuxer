@@ -227,6 +227,8 @@ Options:
       --analysis-tuning <0-5>     Controls L1 analysis tuning [default: balanced]
       --fps <FPS>                 Frame rate [default: auto-detected]
       --mdl <MDL>                 Mastering display [default: auto-detected]
+      --variable-l5 <FILE>        JSON L5 metadata config file path
+      --variable-l5-example       Show example JSON for --variable-l5 option
       --l5 <T,B[,L,R]>            Dolby Vision L5 active area offsets
       --cuts-first <0|1>          Force first frame as scene-cut [default: 1]
       --cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: 1]

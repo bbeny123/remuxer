@@ -44,7 +44,7 @@ _remuxer_complete() {
     _remuxer_complete_path "$cur" "txt edl" && return ;;
   -r | --hevc)
     _remuxer_complete_path "$cur" "hevc" && return ;;
-  -j | --json)
+  -j | --json | --variable-l5)
     _remuxer_complete_path "$cur" "json" && return ;;
   --subs)
     _remuxer_complete_path "$cur" "srt" && return ;;
@@ -98,7 +98,7 @@ _remuxer_complete() {
   frame-shift) options="--base-input" ;;
   sync) options="--base-input --output --frame-shift --info --plot" ;;
   fix) options="--formats --input-type --output --info --l5 --cuts-clear --cuts-first --cuts-consecutive --json --json-examples" ;;
-  generate) options="--formats --input-type --output --sample --info --plot --prores-profile --scene-cuts --analysis-tuning --fps --mdl --l5 --cuts-clear --cuts-first --cuts-consecutive" ;;
+  generate) options="--formats --input-type --output --sample --info --plot --prores-profile --scene-cuts --analysis-tuning --fps --mdl --l5 --variable-l5 --variable-l5-example --cuts-clear --cuts-first --cuts-consecutive" ;;
   inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames --l5 --cuts-clear --cuts-first --cuts-consecutive" ;;
   remux) options="--formats --input-type --output --output-format --subs --find-subs --copy-subs --copy-audio --hevc --title --auto-title --auto-tracks --clean-filenames" ;;
   extract) options="--formats --input-type --output --output-format --sample --prores-profile --info --plot" ;;
