@@ -26,12 +26,13 @@ _remuxer_complete() {
   cmd="${COMP_WORDS[1]}"
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    mapfile -t COMPREPLY < <(compgen -W "info plot frame-shift sync fix inject remux extract cuts subs png mp3" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "info plot frame-shift sync fix generate inject remux extract cuts subs png mp3" -- "$cur")
     return
   fi
 
   case "$cmd" in
   extract) formats="mkv mp4 m2ts ts hevc" && output_formats="hevc bin mov" ;;
+  generate) formats="mkv mp4 m2ts ts hevc mov" ;;
   remux | png | mp3) formats="mkv mp4 m2ts ts" && output_formats="mkv mp4" ;;
   subs) formats="mkv" && output_formats="srt" ;;
   esac
@@ -39,6 +40,8 @@ _remuxer_complete() {
   case "$prev" in
   -[ib] | --input | --base-input)
     _remuxer_complete_path "$cur" "$formats" && return ;;
+  --scene-cuts)
+    _remuxer_complete_path "$cur" "txt edl" && return ;;
   -r | --hevc)
     _remuxer_complete_path "$cur" "hevc" && return ;;
   -j | --json)
@@ -58,6 +61,9 @@ _remuxer_complete() {
   -c | --lang-codes) values="pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-subs) values="0 1 pol eng fre ger ita por rus spa chi jpn kor" ;;
   --copy-audio) values="1 2 3" ;;
+  --analysis-tuning) values="legacy most more balanced less least" ;;
+  --mdl) values="P3_1000 BT_1000 P3_2000 BT_2000 P3_4000 BT_4000" && cur=${cur^^} ;;
+  --fps) values="23.976 24000/1001 24 25 29.97 30 50 59.94 48 60" ;;
   --prores-profile) values="0 1 2 3 4 5" ;;
   -[fuk] | --frame-shift | --title | --frames | --time | --l5 | --cuts-clear) return ;;
   esac
@@ -92,6 +98,7 @@ _remuxer_complete() {
   frame-shift) options="--base-input" ;;
   sync) options="--base-input --output --frame-shift --info --plot" ;;
   fix) options="--formats --input-type --output --info --l5 --cuts-clear --cuts-first --cuts-consecutive --json --json-examples" ;;
+  generate) options="--formats --input-type --output --sample --info --plot --prores-profile --scene-cuts --analysis-tuning --fps --mdl --l5 --cuts-clear --cuts-first --cuts-consecutive" ;;
   inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames --l5 --cuts-clear --cuts-first --cuts-consecutive" ;;
   remux) options="--formats --input-type --output --output-format --subs --find-subs --copy-subs --copy-audio --hevc --title --auto-title --auto-tracks --clean-filenames" ;;
   extract) options="--formats --input-type --output --output-format --sample --prores-profile --info --plot" ;;
