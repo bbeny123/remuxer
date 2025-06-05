@@ -1130,13 +1130,11 @@ generate() {
 
 generate_l5_examples() {
   local output="$1" example='{
-    "active_area": {
-      "presets": [
-        { "id": 0, "top": 270, "bottom": 270, "left": 0, "right": 0 },
-        { "id": 1, "top": 130, "bottom": 130, "left": 0, "right": 0 }
-      ],
-      "edits": { "0-149": 0, "150-300": 1, "301-399": 0, "400-599": 1, "600-999": 0 }
-    }
+    "presets": [
+      { "id": 0, "top": 270, "bottom": 270, "left": 0, "right": 0 },
+      { "id": 1, "top": 130, "bottom": 130, "left": 0, "right": 0 }
+    ],
+    "edits": { "0-149": 0, "150-300": 1, "301-399": 0, "400-599": 1, "600-999": 0 }
   }'
 
   echo "$example" | jq .
