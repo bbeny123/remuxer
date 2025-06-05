@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 shopt -s expand_aliases
 
@@ -1035,7 +1035,7 @@ fix_scene_cuts() {
 }
 
 generate_variable_l5() {
-  local prores="$1" scene_cuts="$2" mdl="$3" fps="$4" variable_l5="$5" xml="$6" presets=() cuts=() edits l5 range cuts_dynamic xml_first xml_mid xml_tmp
+  local prores="$1" scene_cuts="$2" mdl="$3" fps="$4" variable_l5="$5" xml="$6" presets=() cuts=() edits l5 range cuts_dynamic cuts_tmp xml_first xml_mid xml_tmp
   local -i id from to i=0
 
   while read -r from; do
@@ -1057,7 +1057,8 @@ generate_variable_l5() {
     [[ ! -v cuts[$((to + 1))] ]] && log_kill "$(red 'Error:') Variable L5 ranges must end just before a scene-cut; invalid range end: '$to'" 2
   done < <(echo "$edits" | cut -d' ' -f1)
 
-  cuts_dynamic=$(tmp_file "$input" 'txt' 'CUTS-dynamic') && cp "$scene_cuts" "$cuts_dynamic"
+  cuts_dynamic=$(tmp_file "$input" 'txt' 'CUTS-DYNAMIC') && cp "$scene_cuts" "$cuts_dynamic"
+  cuts_tmp=$(tmp_file "$input" 'txt' 'CUTS-TMP')
   xml_tmp=$(tmp_file "$input" 'xml' 'GENERATED-TMP') && rm -f "$xml_tmp"
   xml_first=$(tmp_file "$input" 'xml' 'GENERATED-FIRST') && rm -f "$xml_first"
   xml_mid=$(tmp_file "$input" 'xml' 'GENERATED-MID')
@@ -1065,7 +1066,8 @@ generate_variable_l5() {
   while read -r range id; do
     from=${range%-*}
     read -ra l5 <<<"${presets["$id"]}"
-    sed -i "/^$from$/,\$!d" "$cuts_dynamic"
+
+    awk -v f="$from" '$0 == f {p=1} p' "$cuts_dynamic" >"$cuts_tmp" && mv "$cuts_tmp" "$cuts_dynamic"
 
     if ! cm_analyze -s "$cuts_dynamic" -m "$mdl" -r "$fps" --source-format "pq bt2020" -f "$range" --letterbox "${l5[@]}" --analysis-tuning "$L1_TUNING" "$prores" "$xml_tmp"; then
       log_t "%s Failed to generate DV P8 RPU xml for range '%s', skipping..." "$(red 'Error:')" "$range" && return 1

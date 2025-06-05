@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 _remuxer_complete_path() {
   local cur="$1" type_or_formats="$2" dirs=()
