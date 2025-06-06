@@ -96,7 +96,7 @@ Usage: remuxer [OPTIONS] <COMMAND>
 
 Commands:
   info           Show Dolby Vision information
-  plot           Plot L1/L2 metadata
+  plot           Plot L1/L2/L8 metadata
   frame-shift    Calculate frame shift
   sync           Synchronize Dolby Vision RPU files
   fix            Fix or adjust Dolby Vision RPU(s)
@@ -108,6 +108,7 @@ Commands:
   subs           Extract .srt subtitles
   png            Extract video frame(s) as PNG image(s)
   mp3            Extract audio track(s) as MP3 file(s)
+  edl            Convert scene-cut list between .txt and .edl
 
 Options:
   -h, --help     Show help (use '--help' for a detailed version)
@@ -378,4 +379,19 @@ Options:
   -t, --input-type <TYPE>   Filter files by type in dir inputs
   -o, --output <OUTPUT>     Output file path [default: generated]
   -s, --sample [<SECONDS>]  Process only the first N seconds of input
+```
+
+### `edl` command
+
+**Description:** Convert *scene-cut list* between `.txt` and `.edl`
+
+```bash
+Usage: remuxer edl [OPTIONS] [INPUT...]
+
+Options:
+  -i, --input <INPUT>       Input file/dir path [can be used multiple times]
+  -x, --formats <F1[,...]>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>   Filter files by type in dir inputs
+  -o, --output <OUTPUT>     Output file path [default: generated]
+      --fps <FPS>           Frame rate [default: 23.976]
 ```

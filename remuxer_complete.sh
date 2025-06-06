@@ -26,7 +26,7 @@ _remuxer_complete() {
   cmd="${COMP_WORDS[1]}"
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    mapfile -t COMPREPLY < <(compgen -W "info plot frame-shift sync fix generate inject remux extract cuts subs png mp3" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "info plot frame-shift sync fix generate inject remux extract cuts subs png mp3 edl" -- "$cur")
     return
   fi
 
@@ -35,6 +35,7 @@ _remuxer_complete() {
   generate) formats="mkv mp4 m2ts ts hevc mov" ;;
   remux | png | mp3) formats="mkv mp4 m2ts ts" && output_formats="mkv mp4" ;;
   subs) formats="mkv" && output_formats="srt" ;;
+  edl) formats="txt edl" ;;
   esac
 
   case "$prev" in
@@ -63,7 +64,7 @@ _remuxer_complete() {
   --copy-audio) values="1 2 3" ;;
   --analysis-tuning) values="legacy most more balanced less least" ;;
   --mdl) values="P3_1000 BT_1000 P3_2000 BT_2000 P3_4000 BT_4000" && cur=${cur^^} ;;
-  --fps) values="23.976 24000/1001 24 25 29.97 30 50 59.94 48 60" ;;
+  --fps) values="23.976 24000/1001 24 25 30 50 48 60" && [ "$cmd" != 'edl' ] && values+=" 29.97 59.94" ;;
   --prores-profile) values="0 1 2 3 4 5" ;;
   -[fuk] | --frame-shift | --title | --frames | --time | --l5 | --cuts-clear) return ;;
   esac
@@ -106,6 +107,7 @@ _remuxer_complete() {
   subs) options="--input-type --output --lang-codes --clean-filenames" ;;
   png) options="--formats --input-type --output --time" ;;
   mp3) options="--formats --input-type --output --sample" ;;
+  edl) options="--formats --input-type --output --fps" ;;
   esac
 
   [[ -n "$options" ]] && mapfile -t COMPREPLY < <(compgen -W "--input $options --out-dir --tmp-dir --help" -- "$cur")

@@ -41,19 +41,20 @@ PRORES_MACOS='2'
 EXTRACT_SHORT_SEC='23'
 
 declare -A commands=(
-  [info]="       Show Dolby Vision information                         | xtospu       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [plot]="       Plot L1/L2/L8 metadata                                | xtosp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [frame-shift]="Calculate frame shift                                 | b            | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [sync]="       Synchronize Dolby Vision RPU files                    | bofnp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [fix]="        Fix or adjust Dolby Vision RPU(s)                     | xtojnFH      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [generate]="   Generate Dolby Vision P8 RPU for HDR10 video(s)       | xtonpFGP     | .mkv, .mp4, .m2ts, .ts, .hevc, .mov"
-  [inject]="     Sync & Inject Dolby Vision RPU                        | boeqflwnmpFH | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [remux]="      Remux video file(s)                                   | xtoemr       | .mkv, .mp4, .m2ts, .ts"
-  [extract]="    Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpP     | .mkv, .mp4, .m2ts, .ts, .hevc"
-  [cuts]="       Extract scene-cut frame list(s)                       | xtos         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [subs]="       Extract .srt subtitles                                | tocm         | .mkv"
-  [png]="        Extract video frame(s) as PNG image(s)                | xtok         | .mkv, .mp4, .m2ts, .ts"
-  [mp3]="        Extract audio track(s) as MP3 file(s)                 | xtos         | .mkv, .mp4, .m2ts, .ts"
+  [info]="       Show Dolby Vision information                         | xtospu        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="       Plot L1/L2/L8 metadata                                | xtosp         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [frame-shift]="Calculate frame shift                                 | b             | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [sync]="       Synchronize Dolby Vision RPU files                    | bofnp         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [fix]="        Fix or adjust Dolby Vision RPU(s)                     | xtojnFHI      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [generate]="   Generate Dolby Vision P8 RPU for HDR10 video(s)       | xtonpFGIP     | .mkv, .mp4, .m2ts, .ts, .hevc, .mov"
+  [inject]="     Sync & Inject Dolby Vision RPU                        | boeqflwnmpFHI | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [remux]="      Remux video file(s)                                   | xtoemr        | .mkv, .mp4, .m2ts, .ts"
+  [extract]="    Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpP      | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [cuts]="       Extract scene-cut frame list(s)                       | xtos          | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [subs]="       Extract .srt subtitles                                | tocm          | .mkv"
+  [png]="        Extract video frame(s) as PNG image(s)                | xtok          | .mkv, .mp4, .m2ts, .ts"
+  [mp3]="        Extract audio track(s) as MP3 file(s)                 | xtos          | .mkv, .mp4, .m2ts, .ts"
+  [edl]="        Convert scene-cut list between .txt and .edl          | xtoI          | .txt, .edl"
 )
 declare -A cmd_description=(
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
@@ -803,6 +804,95 @@ mp3() {
   else
     logf "No audio tracks to extract for '%s', skipping...." "$input_name"
   fi
+}
+
+txt_to_edl() {
+  local input="$1" fps="$2" frames=() frame
+
+  mapfile -t frames < "$input"
+
+  for frame in "${frames[@]}"; do
+    [[ ! "$frame" =~ ^[0-9]*$ ]] && logf "Detected a non-numeric value: '%s', aborting..." "$frame" && return 1
+  done
+
+  awk -v fps="$fps" '
+  function frame_to_timecode(frame, fps) {
+    seconds = int(frame / fps)
+    hh = int(seconds / 3600)
+    mm = int((seconds % 3600) / 60)
+    ss = int(seconds % 60)
+    ff = int(frame % fps)
+    return sprintf("%02d:%02d:%02d:%02d", hh, mm, ss, ff)
+  }
+
+  BEGIN { count = 0 }
+
+  { if (NF > 0 && $1 != "") frames[count++] = $1 }
+
+  END {
+    if (count < 2) exit 1
+
+    print "TITLE: Scene Cuts"
+    print "FCM: NON-DROP FRAME"
+    print ""
+
+    current_frame = frame_to_timecode(frames[0], fps)
+
+    for (i = 1; i < count; i++) {
+      if (frames[i] == "") exit 1
+      next_frame = frame_to_timecode(frames[i], fps)
+      printf "%04d  001      V     C        %s %s %s %s  \n", i, current_frame, next_frame, current_frame, next_frame
+      current_frame = next_frame
+    }
+  }' "$input"
+}
+
+edl_to_txt() {
+  local input="$1" fps="$2"
+
+  awk -v fps="$fps" '
+  function timecode_to_frame(timecode, fps) {
+    split(timecode, p, ":")
+    return (p[1] * 3600 + p[2] * 60 + p[3]) * fps + p[4]
+  }
+
+  /^[0-9]+.*[A-Z]+.*[A-Z]+/ {
+    print timecode_to_frame($5, fps)
+    last = $6
+  }
+
+  END {
+    if (last) print timecode_to_frame(last, fps)
+  }' "$input"
+}
+
+edl() {
+  local input="$1" fps="${2:-"24"}" output="$3" ext='txt' prefix='FROM_EDL' result
+
+  [[ "$fps" =~ \.0{1,5}$ ]] && fps="${fps%%.*}"
+
+  case "$fps" in
+  '23.976' | '23.98' | '24000/1001') fps=24 ;;
+  *[/.]* | 0) log_kill "Unsupported $B--fps$N value: $fps" ;;
+  esac
+
+  check_extension "$input" ".txt" && ext='edl' && prefix='EDL'
+  prefix+="_${fps}"
+
+  log_t "Converting '%s' to .%s (FPS: %s)" "$(basename "$input")" "$ext" "$fps"
+
+  output=$(out_file "$input" "$ext" "$prefix" "$output")
+  [[ -e "$output" ]] && logf "Output file '%s' already exists, skipping..." "$output" && return 1
+
+  if [ "$ext" = 'txt' ]; then
+    result=$(edl_to_txt "$input" "$fps") || return 1
+  else
+    result=$(txt_to_edl "$input" "$fps") || return 1
+  fi
+
+  echo "$result" >"$output"
+
+  logf "Conversion to .%s completed successfully — output file: '%s'" "$ext" "$output"
 }
 
 fix_rpu_cuts_consecutive() {
@@ -1776,7 +1866,7 @@ help1() {
 }
 
 help() {
-  local cmd="$1" s b t q i G bin clean multiple_inputs output_info default_l5 default_plot_info default_output='generated' default_output_format='auto-detected'
+  local cmd="$1" s b t q i G bin clean multiple_inputs output_info default_l5 default_plot_info default_output='generated' default_output_format='auto-detected' default_fps
   local -r description=${cmd_description[$cmd]:-$(cmd_info "$cmd")} formats=$(cmd_info "$cmd" 3)
   [[ "$cmd_options" == *b* ]] && b=1
   [[ "$cmd_options" == *t* ]] && t=1 && multiple_inputs='[ignored when multiple inputs]'
@@ -1787,6 +1877,7 @@ help() {
   [ "$cmd" = 'extract' ] && default_output_format='bin'
   [ "$cmd" != 'plot' ] && i=1
   [ "$cmd" = 'info' ] && default_output='<print to console>' && default_plot_info="/$B--frames$N" || output_info="$multiple_inputs"
+  [ "$cmd" = 'edl' ] && default_fps='23.976'
 
   case "$cmd_options" in
   *F*) help_left+=17 ;;
@@ -1845,7 +1936,7 @@ help() {
                                          $B- 3 / balanced$N – Balanced
                                          $B- 4 / less$N     – Less Highlight Detail
                                          $B- 5 / least$N    – Least Highlight Detail (Brightest)"
-  help1 'G' "--fps <FPS>                 Frame rate [default: ${B}auto-detected$N]
+  help1 'I' "--fps <FPS>                 Frame rate [default: $B${default_fps:-"auto-detected"}$N]
                                          [example values: ${B}23.976, 24000/1001, 24, 25$N]"
   help1 'G' "--mdl <MDL>                 Mastering display [default: ${B}auto-detected$N]
                                          Allowed values:
@@ -1939,7 +2030,7 @@ show_help() {
   echo "CLI tool for processing DV videos, with a focus on CMv4.0 + P7 CMv2.9 hybrid creation"
   echo1 "${BU}Usage:$N $REMUXER [OPTIONS] <COMMAND>"
   echo1 "${BU}Commands:$N"
-  for cmd in info plot frame-shift sync fix generate inject remux extract cuts subs png mp3; do
+  for cmd in info plot frame-shift sync fix generate inject remux extract cuts subs png mp3 edl; do
     help0 "$cmd            $(cmd_info "$cmd")"
   done
   echo1 "${BU}Options:$N"
@@ -2158,7 +2249,7 @@ parse_args() {
     --scene-cuts)                scene_cuts=$(parse_file "$2" "$scene_cuts" "$cmd" "$1" 'G' '.txt .edl') ;;
     --analysis-tuning)               tuning=$(parse_option "$2" "$tuning" "$cmd" "$1" 'G' '0, legacy, 1, most, 2, more, 3, balanced, 4, less, 5, least') ;;
     --mdl)                              mdl=$(parse_option "$2" "$mdl" "$cmd" "$1" 'G' '7, P3_4000, 8, BT_4000, 20, P3_1000, 21, BT_1000, 30, P3_2000, 31, BT_2000', '([78]|[23][01]|(bt|p3)_[124]000)') ;;
-    --fps)                              fps=$(parse_option "$2" "$fps" "$cmd" "$1" 'G' '<frame-rate>' '[0-9]{1,5}([./][0-9]{1,5})?') ;;
+    --fps)                              fps=$(parse_option "$2" "$fps" "$cmd" "$1" 'I' '<frame-rate>' '[0-9]{1,5}([./][0-9]{1,5})?') ;;
     --prores-profile)        prores_profile=$(parse_option "$2" "$prores_profile" "$cmd" "$1" 'P' '0, 1, 2, 3, 4, 5') ;;
     --l5)                                l5=$(parse_option "$2" "$l5" "$cmd" "$1" 'F' '<offset>' '[0-9]+' 1 '2|4') ;;
     --cuts-clear)                cuts_clear=$(parse_option "$2" "$cuts_clear" "$cmd" "$1" 'H' '<frame-range>' '[0-9]+(-[0-9]+)?' 1) ;;
@@ -2264,6 +2355,7 @@ parse_args() {
     subs) subs "$input" "$output" ;;
     png) png "$input" "$timestamps" "$output" ;;
     mp3) mp3 "$input" "$sample" "$output" ;;
+    edl) edl "$input" "$fps" "$output" ;;
     *) log "Unknown command: $cmd" 2; show_help; exit 1 ;;
     esac
   done

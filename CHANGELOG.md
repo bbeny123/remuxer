@@ -5,6 +5,7 @@
     - `generate`: Generate _Dolby Vision P8 RPU_ for _HDR10_ video(s)
     - `png`: Extract _video frame(s)_ as `PNG` image(s)
     - `mp3`: Extract _audio track(s)_ as `MP3` file(s)
+    - `edl`: Convert _scene-cut_ list between `.txt` and `.edl`
 - **Rewritten info command:**
     - New option: `--frames` – print RPU info for selected frames
     - Added support for `--output` option
