@@ -180,6 +180,26 @@ clean_filename() {
   trim "${input//./ }" | tr -s ' '
 }
 
+relative_path() {
+  local path="$1" relative_to="${2:-"$(pwd)"}"
+
+  [ "$path" != "/" ] && path="${path%/}"
+  [ "$relative_to" != "/" ] && relative_to="${relative_to%/}"
+
+  [ "$path" = "$relative_to" ] && echo "." && return 0
+
+  local appendix="${path##/}" relative
+  while appendix="${path#"$relative_to"/}"; [[ "$relative_to" != '/' && "$appendix" = "$path" ]]; do
+
+    [ "$relative_to" = "$appendix" ] && echo "${relative#/}" && return 0
+
+    relative_to="${relative_to%/*}"
+    relative="$relative/.."
+  done
+
+  echo "${relative#/}${relative:+${appendix:+/}}${appendix#/}"
+}
+
 windows_safe_path() {
   local path="$1"
   windows && [[ "$path" =~ ^/([A-Za-z])/ ]] && path="${BASH_REMATCH[1]}:/${path:3}"
@@ -1333,8 +1353,7 @@ inject_rpu() {
     cm40_input "$rpu_synced" && cm29_input "$rpu_base" && cmv40_transferable='"allow_cmv4_transfer": true,'
 
     local -r transfer_config=$(tmp_file "$rpu_synced" 'json' 'EDITOR-TRANSFER')
-    rpu_synced=$(realpath --relative-to="$(pwd)" "$rpu_synced")
-    rpu_synced=$(windows_safe_path "$rpu_synced")
+    rpu_synced=$(realpath "$rpu_synced") && rpu_synced=$(windows_safe_path "$rpu_synced")
     echo "{ $cmv40_transferable \"source_rpu\": \"$rpu_synced\", \"rpu_levels\": [$RPU_LEVELS] }" >"$transfer_config"
 
     if ! dovi_tool editor -i "$rpu_base" -j "$transfer_config" -o "$rpu_injected" >&2; then
@@ -1471,10 +1490,9 @@ subtitles() {
   local input="$1" subs="$2" clean_filename="${3// /.}" subs_input
 
   if [[ -n "$subs" ]]; then
-    subs=$(realpath "$subs")
     file_exists "$subs" '' 1
     check_extension "$subs" '.srt' 1
-    echo "$subs"
+    realpath "$subs"
   fi
 
   [ "$SUBS_AUTODETECTION" != 1 ] && return
@@ -1723,8 +1741,8 @@ subs() {
 }
 
 help_dir() {
-  local out_dir="$1" result
-  local result=$(realpath --relative-to="$(pwd)" "$out_dir")
+  local out_dir="$1" result="$1"
+  [[ "$result" == /* ]] && result=$(relative_path "$out_dir")
 
   [ "$result" = '.' ] && echo "<working-dir>" && return
 
