@@ -41,20 +41,20 @@ PRORES_MACOS='2'
 EXTRACT_SHORT_SEC='23'
 
 declare -A commands=(
-  [info]="       Show Dolby Vision information                         | xtospu        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [plot]="       Plot L1/L2/L8 metadata                                | xtosp         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [frame-shift]="Calculate frame shift                                 | b             | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [sync]="       Synchronize Dolby Vision RPU files                    | bofnp         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [fix]="        Fix or adjust Dolby Vision RPU(s)                     | xtojnFHI      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [generate]="   Generate Dolby Vision P8 RPU for HDR10 video(s)       | xtonpFGIP     | .mkv, .mp4, .m2ts, .ts, .hevc, .mov"
-  [inject]="     Sync & Inject Dolby Vision RPU                        | boeqflwnmpFHI | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [remux]="      Remux video file(s)                                   | xtoemr        | .mkv, .mp4, .m2ts, .ts"
-  [extract]="    Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpP      | .mkv, .mp4, .m2ts, .ts, .hevc"
-  [cuts]="       Extract scene-cut frame list(s)                       | xtos          | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [subs]="       Extract .srt subtitles                                | tocm          | .mkv"
-  [png]="        Extract video frame(s) as PNG image(s)                | xtok          | .mkv, .mp4, .m2ts, .ts"
-  [mp3]="        Extract audio track(s) as MP3 file(s)                 | xtos          | .mkv, .mp4, .m2ts, .ts"
-  [edl]="        Convert scene-cut list between .txt and .edl          | xtoI          | .txt, .edl"
+  [info]="       Show Dolby Vision information                         | xtospu       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="       Plot L1/L2/L8 metadata                                | xtosp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [frame-shift]="Calculate frame shift                                 | b            | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [sync]="       Synchronize Dolby Vision RPU files                    | bofnp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [fix]="        Fix or adjust Dolby Vision RPU(s)                     | xtojnFH      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [generate]="   Generate Dolby Vision P8 RPU for HDR10 video(s)       | xtonpFGIP    | .mkv, .mp4, .m2ts, .ts, .hevc, .mov"
+  [inject]="     Sync & Inject Dolby Vision RPU                        | boeqflwnmpFH | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [remux]="      Remux video file(s)                                   | xtoemr       | .mkv, .mp4, .m2ts, .ts"
+  [extract]="    Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpP     | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [cuts]="       Extract scene-cut frame list(s)                       | xtos         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [subs]="       Extract .srt subtitles                                | tocm         | .mkv"
+  [png]="        Extract video frame(s) as PNG image(s)                | xtok         | .mkv, .mp4, .m2ts, .ts"
+  [mp3]="        Extract audio track(s) as MP3 file(s)                 | xtos         | .mkv, .mp4, .m2ts, .ts"
+  [edl]="        Convert scene-cut list between .txt and .edl          | xtoI         | .txt, .edl"
 )
 declare -A cmd_description=(
   [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
@@ -190,7 +190,10 @@ relative_path() {
   [ "$path" = "$relative_to" ] && echo "." && return 0
 
   local appendix="${path##/}" relative
-  while appendix="${path#"$relative_to"/}"; [[ "$relative_to" != '/' && "$appendix" = "$path" ]]; do
+  while
+    appendix="${path#"$relative_to"/}"
+    [[ "$relative_to" != '/' && "$appendix" = "$path" ]]
+  do
 
     [ "$relative_to" = "$appendix" ] && echo "${relative#/}" && return 0
 
@@ -809,7 +812,7 @@ mp3() {
 txt_to_edl() {
   local input="$1" fps="$2" frames=() frame
 
-  mapfile -t frames < "$input"
+  mapfile -t frames <"$input"
 
   for frame in "${frames[@]}"; do
     [[ ! "$frame" =~ ^[0-9]*$ ]] && logf "Detected a non-numeric value: '%s', aborting..." "$frame" && return 1
