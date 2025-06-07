@@ -12,7 +12,7 @@ readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/tools"
 
 alias jq="'$TOOLS_DIR/jq-win64.exe'"                                         # v1.7.1: https://jqlang.org/download/
 alias mediainfo="'$TOOLS_DIR/MediaInfo.exe'"                                 # v25.04: https://mediaarea.net/pl/MediaInfo/Download
-alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel warning" # v7.1.1: https://ffmpeg.org/download.html
+alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel error"   # v7.1.1: https://ffmpeg.org/download.html
 alias mkvmerge="'$TOOLS_DIR/mkvtoolnix/mkvmerge.exe'"                        # v92.0:  https://mkvtoolnix.download/downloads.html
 alias mkvextract="'$TOOLS_DIR/mkvtoolnix/mkvextract.exe'"                    #
 alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                                 # v2.3.0: https://github.com/quietvoid/dovi_tool/releases
