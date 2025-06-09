@@ -45,7 +45,7 @@ declare -A commands=(
   [plot]="       Plot L1/L2/L8 metadata                                | xtosp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [frame-shift]="Calculate frame shift                                 | b            | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [sync]="       Synchronize Dolby Vision RPU files                    | bofnp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [fix]="        Fix or adjust Dolby Vision RPU(s)                     | xtojnFH      | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [fix]="        Fix or adjust Dolby Vision RPU(s)                     | xtojnFHS     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [generate]="   Generate Dolby Vision P8 RPU for HDR10 video(s)       | xtonpFGIP    | .mkv, .mp4, .m2ts, .ts, .hevc, .mov"
   [inject]="     Sync & Inject Dolby Vision RPU                        | boeqflwnmpFH | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [remux]="      Remux video file(s)                                   | xtoemr       | .mkv, .mp4, .m2ts, .ts"
@@ -404,6 +404,18 @@ to_rpu() {
   [ "$info" = 1 ] && info "$output" "$short_sample" "$short_sample" >&2
 
   echo "$output"
+}
+
+rpu_or_sample() {
+  local input="$1" quiet="${2:-1}" output
+
+  file_exists "$input" 'input' 1
+  check_extension "$input" ".bin" && echo "$input" && return
+
+  output=$(out_file "$input" 'bin' 'RPU')
+  [[ -f "$output" ]] && echo "$output" && return
+
+  to_rpu "$input" 1 "$quiet"
 }
 
 extract() {
@@ -898,6 +910,152 @@ edl() {
   logf "Conversion to .%s completed successfully — output file: '%s'" "$ext" "$output"
 }
 
+l6_mdl_safe() {
+  local mdl_min="$1" mdl_max="$2"
+
+  if (( mdl_min == 0 && mdl_max == 0 )); then
+    mdl_min=1 && mdl_max=1000
+  elif (( mdl_min == 0 )); then
+    (( mdl_max == 4000 )) && mdl_min=50 || mdl_min=1
+  elif (( mdl_max == 0 )); then
+    (( mdl_min == 50 )) && mdl_max=4000 || mdl_max=1000
+  fi
+
+  echo "$mdl_min,$mdl_max"
+}
+
+video_l6() {
+  local input="$1" mdl mdl_min=0 mdl_max=0 max_cll=0 max_fall=0
+  check_extension "$input" ".bin" && echo "0,0,0,0" && return
+
+  IFS='|' read -r mdl max_cll max_fall < <(mediainfo "$input" --Inform='Video;%MasteringDisplay_Luminance%|%MaxCLL%|%MaxFALL%\n' | tr -d '\r')
+
+  [[ "$mdl" =~ (min: [0-9]+\.([0-9]+)) ]] && mdl_min=$((10#${BASH_REMATCH[2]}))
+  [[ "$mdl" =~ (max: ([0-9]+)) ]] && mdl_max=$((10#${BASH_REMATCH[2]}))
+  [[ "$max_cll" =~ ^([0-9]+) ]] && max_cll=$((10#${BASH_REMATCH[1]}))
+  [[ "$max_fall" =~ ^([0-9]+) ]] && max_fall=$((10#${BASH_REMATCH[1]}))
+
+  echo "$mdl_min,$mdl_max,$max_cll,$max_fall"
+}
+
+rpu_l6() {
+  local rpu=$(rpu_or_sample "$1") l6 mdl_min=0 mdl_max=0 max_cll=0 max_fall=0
+
+  l6=$(dovi_tool info -s "$rpu" 2>&1 | grep 'L6 metadata')
+
+  if [[ "$l6" =~ ([0-9]+)/([0-9]+) ]]; then
+    mdl_min=$((10#${BASH_REMATCH[1]}))
+    mdl_max=$((10#${BASH_REMATCH[2]}))
+  fi
+
+  [[ "$l6" =~ (MaxCLL: ([0-9]+)) ]] && max_cll=$((10#${BASH_REMATCH[2]}))
+  [[ "$l6" =~ (MaxFALL: ([0-9]+)) ]] && max_fall=$((10#${BASH_REMATCH[2]}))
+
+  echo "$mdl_min,$mdl_max,$max_cll,$max_fall"
+}
+
+detect_l6() {
+  local input="$1" video_l6="$2" mdl="${3:-"0,0"}" l6="$4" fallback="$5" mdl_min mdl_max max_cll max_fall
+  [ -n "$l6" ] && echo "$l6" && return
+
+  [ "$video_l6" = 1 ] && l6=$(video_l6 "$input") || l6=$(rpu_l6 "$input")
+  if [ "$l6" = '0,0,0,0' ] || [[ "$mdl," != '0,0,' && "$l6" != "$mdl,"* ]]; then
+    echo "|$fallback" && return
+  fi
+
+  IFS=',' read -r mdl_min mdl_max max_cll max_fall <<<"$l6"
+  ((mdl_min != 0 && mdl_max != 0 && max_cll != 0 && max_fall != 0)) && echo "$l6" && return
+
+  [ -z "$fallback" ] && ((max_cll != 0 && max_fall != 0)) && fallback="$(l6_mdl_safe "$mdl_min" "$mdl_max"),$max_cll,$max_fall"
+
+  echo "|$fallback"
+}
+
+forced_l6() {
+  local input="$1" l6="$2" l6_source="$3" l6_source2="$4" mdl_min="$5" mdl_max="$6" max_cll max_fall
+  IFS=',' read -r max_cll max_fall <<<"$l6"
+
+  if ((mdl_min == 0 && mdl_max == 0)); then
+    IFS=',' read -r mdl_min mdl_max < <(video_l6 "$input")
+
+    if ((mdl_min == 0 && mdl_max == 0)) && [ -n "$l6_source" ]; then
+      IFS=',' read -r mdl_min mdl_max < <(rpu_l6 "$l6_source")
+      ((mdl_min == 0 && mdl_max == 0)) && IFS=',' read -r mdl_min mdl_max < <(video_l6 "$l6_source")
+    fi
+
+    if ((mdl_min == 0 && mdl_max == 0)) && [ -n "$l6_source2" ]; then
+      IFS=',' read -r mdl_min mdl_max < <(rpu_l6 "$l6_source2")
+      ((mdl_min == 0 && mdl_max == 0)) && IFS=',' read -r mdl_min mdl_max < <(video_l6 "$l6_source2")
+    fi
+  fi
+
+  echo "$(l6_mdl_safe "$mdl_min" "$mdl_max"),$max_cll,$max_fall"
+}
+
+forced_l6_source() {
+  local l6_source="$1" default_mdl_min="$2" default_mdl_max="$3" l6 fallback mdl_min mdl_max max_cll max_fall
+
+  IFS='|' read -r l6 fallback < <(detect_l6 "$l6_source" 0)
+  IFS='|' read -r l6 fallback < <(detect_l6 "$l6_source" 1 "" "$l6" "$fallback")
+  [ -z "$l6" ] && l6="$fallback"
+  [ -z "$l6" ] && log_t "%s $B--l6-source$N contains invalid L6 metadata, skipping" "$(yellow 'Warning:')" && return
+
+  IFS=',' read -r mdl_min mdl_max max_cll max_fall <<<"$l6"
+  ((mdl_min == 0 && mdl_max == 0)) && mdl_min="$default_mdl_min" && mdl_max="$default_mdl_max"
+
+  echo "$(l6_mdl_safe "$mdl_min" "$mdl_max"),$max_cll,$max_fall"
+}
+
+to_l6() {
+  local rpu="$1" input="$2" l6="$3" l6_source="$4" l6_source2="$5" mdl_min mdl_max max_cll max_fall fallback
+
+  IFS=',' read -r mdl_min mdl_max max_cll max_fall < <(rpu_l6 "$rpu")
+
+  [[ -n "$l6_source" && -z "$l6" && -z "$l6_source2" ]] && forced_l6_source "$l6_source" "$mdl_min" "$mdl_max" && return
+  [ -n "$l6" ] && forced_l6 "$input" "$l6" "$l6_source" "$l6_source2" "$mdl_min" "$mdl_max" && return
+
+  ((mdl_min != 0 && mdl_max != 0 && max_cll != 0 && max_fall != 0)) && return
+
+  IFS='|' read -r l6 fallback < <(detect_l6 "$input" 1 "$mdl_min,$mdl_max")
+
+  if [[ -z "$l6" && -n "$l6_source" ]]; then
+    IFS='|' read -r l6 fallback < <(detect_l6 "$l6_source" 0 "$mdl_min,$mdl_max" "$l6" "$fallback")
+    IFS='|' read -r l6 fallback < <(detect_l6 "$l6_source" 1 "$mdl_min,$mdl_max" "$l6" "$fallback")
+  fi
+
+  if [[ -z "$l6" && -n "$l6_source2" ]]; then
+    IFS='|' read -r l6 fallback < <(detect_l6 "$l6_source2" 0 "$mdl_min,$mdl_max" "$l6" "$fallback")
+    IFS='|' read -r l6 fallback < <(detect_l6 "$l6_source2" 1 "$mdl_min,$mdl_max" "$l6" "$fallback")
+  fi
+
+  [ -n "$l6" ] && echo "$l6" && return
+  ((max_cll != 0 && max_fall != 0)) && echo "$(l6_mdl_safe "$mdl_min" "$mdl_max"),$max_cll,$max_fall" && return
+  [ -n "$fallback" ] && echo "$fallback"
+}
+
+fix_rpu_l6() {
+  local rpu="$1" input="$2" l6="$3" l6_source="$4" l6_source2="$5" mdl_min mdl_max max_cll max_fall
+
+  IFS=',' read -r mdl_min mdl_max max_cll max_fall < <(to_l6 "$rpu" "$input" "$l6" "$l6_source" "$l6_source2")
+  ((mdl_min == 0 || mdl_max == 0)) && return
+
+  printf '"level6": { "min_display_mastering_luminance": %s, "max_display_mastering_luminance": %s, "max_content_light_level": %s, "max_frame_average_light_level": %s }' "$mdl_min" "$mdl_max" "$max_cll" "$max_fall"
+}
+
+fix_rpu_l5() {
+  local l5="$1" l5_config="$2" top bottom left right config
+  [[ -z "$l5" && -z "$l5_config" ]] && return
+
+  if [ -n "$l5_config" ]; then
+    config=$(jq 'del(.crop, .drop_l5)' "$l5_config" -c)
+  else
+    IFS=',' read -r top bottom left right <<<"$l5"
+    config=$(printf '{ "presets": [ { "id": 0, "top": %s, "bottom": %s, "left": %s, "right": %s } ], "edits": { "all": 0 } }' "$top" "$bottom" "${left:-0}" "${right:-0}")
+  fi
+
+  printf '"active_area": %s,' "$config"
+}
+
 fix_rpu_cuts_consecutive() {
   local start="$1" end="$2" type="$3"
 
@@ -946,30 +1104,6 @@ fix_rpu_cuts() {
   echo "$config"
 }
 
-fix_rpu_l5() {
-  local l5="$1" l5_config="$2" top bottom left right config
-  [[ -z "$l5" && -z "$l5_config" ]] && return
-
-  if [ -n "$l5_config" ]; then
-    config=$(jq 'del(.crop, .drop_l5)' "$l5_config" -c)
-  else
-    IFS=',' read -r top bottom left right <<<"$l5"
-    config=$(printf '{ "presets": [ { "id": 0, "top": %s, "bottom": %s, "left": %s, "right": %s } ], "edits": { "all": 0 } }' "$top" "$bottom" "${left:-0}" "${right:-0}")
-  fi
-
-  printf '"active_area": %s,' "$config"
-}
-
-fix_rpu_l6() {
-  local l6="$1" mdl_min mdl_max max_cll max_fall
-  [ -z "$l6" ] && return
-
-  IFS=',' read -r mdl_min mdl_max max_cll max_fall <<<"$l6"
-  [[ -z "$mdl_min" || -z "$mdl_max" || -z "$max_cll" || -z "$max_fall" ]] && return
-
-  printf '"level6": { "min_display_mastering_luminance": %s, "max_display_mastering_luminance": %s, "max_content_light_level": %s, "max_frame_average_light_level": %s }' "$mdl_min" "$mdl_max" "$max_cll" "$max_fall"
-}
-
 fix_rpu_raw() {
   local rpu="$1" json="$2" raw_edited
   [ -z "$json" ] && echo "$rpu" && return
@@ -986,7 +1120,9 @@ fix_rpu_raw() {
 }
 
 fix_rpu() {
-  local input="$1" quiet="${2:-1}" cuts_clear="$3" l5="$4" l6="$5" l5_config="$6" json="$7" output="$8" input_rpu rpu rpu_name config plot
+  local input="$1" quiet="${2:-1}" cuts_clear="$3" l5="$4" l6="$5" l5_config="$6" l6_source="$7" json="$8" output="$9" l6_source2="${10}"
+  local input_rpu rpu rpu_name config plot
+
   input_rpu=$(to_rpu "$input" 0 "$quiet") && rpu_name=$(basename "$input_rpu")
   output=$(out_file "$input_rpu" "bin" 'FIXED' "$output")
 
@@ -999,7 +1135,7 @@ fix_rpu() {
   [ -n "$config" ] && config=$(printf '"scene_cuts": { %s },' "${config%%,}")
 
   config+=$(fix_rpu_l5 "$l5" "$l5_config")
-  config+=$(fix_rpu_l6 "$l6")
+  config+=$(fix_rpu_l6 "$rpu" "$input" "$l6" "$l6_source" "$l6_source2")
 
   [[ -z "$config" && -z "$json" ]] && logf "Nothing to fix — skipping..." && echo "$rpu" && return
 
@@ -1036,7 +1172,13 @@ fix_rpu_examples() {
       ],
       "edits": { "all": 0, "150-300": 1 }
     },
-    "scene_cuts": { "all": true, "0-39": false }
+    "scene_cuts": { "all": true, "0-39": false },
+    "level6": {
+        "max_display_mastering_luminance": 4000,
+        "min_display_mastering_luminance": 50,
+        "max_content_light_level": 1234,
+        "max_frame_average_light_level": 300
+    }
   }'
 
   echo "$example" | jq .
@@ -1051,10 +1193,10 @@ fix_rpu_examples() {
   logf "JSON config example saved to '%s'" "$output"
 }
 
-mdl_fps_l6() {
-  local input="$1" mdl="$2" fps="$3" l6 info_fps info_fps_org info_mdl max_cll max_fall
+mdl_fps() {
+  local input="$1" mdl="$2" fps="$3" info_fps info_fps_org info_mdl
 
-  IFS='|' read -r info_fps info_fps_org info_mdl max_cll max_fall < <(mediainfo "$input" --Inform='Video;%FrameRate_Num%/%FrameRate_Den%|%FrameRate_Original_Num%/%FrameRate_Original_Den%|%MasteringDisplay_ColorPrimaries% %MasteringDisplay_Luminance%|%MaxCLL%|%MaxFALL%\n' | tr -d '\r')
+  IFS='|' read -r info_fps info_fps_org info_mdl < <(mediainfo "$input" --Inform='Video;%FrameRate_Num%/%FrameRate_Den%|%FrameRate_Original_Num%/%FrameRate_Original_Den%|%MasteringDisplay_ColorPrimaries% %MasteringDisplay_Luminance%\n' | tr -d '\r')
 
   if [ -z "$mdl" ]; then
     case "$info_mdl" in
@@ -1085,11 +1227,7 @@ mdl_fps_l6() {
     fi
   fi
 
-  if [[ -n "$max_cll" && -n "$max_fall" && -n "$info_mdl" ]]; then
-    l6="$(echo "$info_mdl" | grep -oE "min: 0\.[0-9]+" | grep -o "[1-9][0-9]*"),$(echo "$info_mdl" | grep -oE "max: [0-9]+" | grep -o "[1-9][0-9]*"),${max_cll%%[^0-9]*},${max_fall%%[^0-9]*}"
-  fi
-
-  echo "$mdl|$fps|$l6"
+  echo "$mdl|$fps"
 }
 
 parse_l5() {
@@ -1199,14 +1337,14 @@ generate_variable_l5() {
 }
 
 generate() {
-  local input="$1" scene_cuts="$2" mdl="$3" fps="$4" l5="$5" variable_l5="$6" output="$7" mov_input prores xml l6 l5_top l5_bottom l5_left l5_right l5_config
+  local input="$1" scene_cuts="$2" mdl="$3" fps="$4" l5="$5" variable_l5="$6" l6="$7" output="$8" mov_input prores xml l6 l5_top l5_bottom l5_left l5_right l5_config
   check_extension "$input" '.mov' && mov_input=1
 
   log_t "Generating DV P8 RPU for: '%s'..." "$(basename "$input")"
   output=$(out_file "$input" "bin" 'GENERATED' "$output")
   [[ -e "$output" ]] && logf "Generated RPU file '%s' already exists, skipping..." "$output" && return
 
-  IFS='|' read -r mdl fps l6 < <(mdl_fps_l6 "$input" "$mdl" "$fps")
+  IFS='|' read -r mdl fps < <(mdl_fps "$input" "$mdl" "$fps")
   [[ -z "$mdl" || -z "$fps" ]] && return
 
   { read -r scene_cuts; read -r l5; } < <(scene_cuts_l5 "$input" "$scene_cuts" "$l5" "$variable_l5" "$mov_input")
@@ -1237,7 +1375,7 @@ generate() {
   fi
 
   log_t "Successfully generated DV P8 RPU for: '%s' - output: '%s'" "$(basename "$input")" "$output"
-  output=$(fix_rpu "$output" 1 "" "$l5" "$l6" "$l5_config")
+  output=$(fix_rpu "$output" 1 "" "$l5" "$l6" "$l5_config" "$input")
   [ "$INFO_INTERMEDIATE" = 1 ] && info "$output" >&2
 }
 
@@ -1418,7 +1556,7 @@ sync_rpu() {
 }
 
 inject_rpu() {
-  local input="$1" input_base="$2" skip_sync="$3" frame_shift="$4" fix="$5" l5="$6" cuts_clear="$7" output="$8" exit_if_exists="$9"
+  local input="$1" input_base="$2" skip_sync="$3" frame_shift="$4" fix="$5" l5="$6" l6="$7" cuts_clear="$8" output="$9" exit_if_exists="${10}"
   local rpu_base rpu_synced rpu_injected rpu_fixed cmv40_transferable
   output=$(out_hybrid "$input" "$input_base" 'bin' "$output" "$fix")
 
@@ -1459,7 +1597,7 @@ inject_rpu() {
   fi
 
   if [ "$fix" = 1 ]; then
-    rpu_fixed=$(fix_rpu "$rpu_injected" 1 "$cuts_clear" "$l5" "" "" "" "$output")
+    rpu_fixed=$(fix_rpu "$rpu_injected" 1 "$cuts_clear" "$l5" "$l6" "" "$input_base" "" "$output" "$input")
     [[ ! "$rpu_fixed" -ef "$output" ]] && cp "$rpu_fixed" "$output"
   fi
 
@@ -1474,7 +1612,7 @@ inject_rpu() {
 }
 
 inject_hevc() {
-  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" fix="$6" l5="$7" cuts_clear="$8" output="$9" exit_if_exists="${10}" rpu_type='Raw' rpu_injected
+  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" fix="$6" l5="$7" l6="$8" cuts_clear="$9" output="${10}" exit_if_exists="${11}" rpu_type='Raw' rpu_injected
 
   output=$(out_hybrid "$input" "$input_base" 'hevc' "$output" "$fix" "$raw_rpu")
   log "Creating hybrid base layer: '$(basename "$output")'..." 1
@@ -1482,7 +1620,7 @@ inject_hevc() {
   if [[ ! -f "$output" ]]; then
     if [ "$raw_rpu" != 1 ]; then
       rpu_type='Hybrid'
-      rpu_injected=$(inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift" "$fix" "$l5" "$cuts_clear")
+      rpu_injected=$(inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift" "$fix" "$l5" "$l6" "$cuts_clear")
       fix=0
     elif [ "$skip_sync" != 1 ]; then
       rpu_injected=$(sync_rpu "$input" "$input_base" "$frame_shift" 1)
@@ -1493,7 +1631,7 @@ inject_hevc() {
     fi
 
     if [ "$fix" = 1 ]; then
-      local -r rpu_fixed=$(fix_rpu "$rpu_injected" 1 "$cuts_clear" "$l5")
+      local -r rpu_fixed=$(fix_rpu "$rpu_injected" 1 "$cuts_clear" "$l5" "$l6" "" "$input_base" "" "" "$input")
       [[ "$INFO_INTERMEDIATE" = 1 && ! "$rpu_fixed" -ef "$rpu_injected" ]] && info "$rpu_fixed" >&2
       rpu_injected="$rpu_fixed"
     fi
@@ -1754,7 +1892,7 @@ remux() {
 }
 
 inject() {
-  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" l5="$6" cuts_clear="$7" output_format="$8" output="$9" subs="${10}" title="${11}" fix type
+  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" l5="$6" l6="$7" cuts_clear="$8" output_format="$9" output="${10}" subs="${11}" title="${12}" fix type
 
   check_extension "$input_base" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
   check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
@@ -1767,14 +1905,14 @@ inject() {
 
   if [[ "$output_format" == *bin* ]]; then
     [ "$raw_rpu" = 1 ] && log_kill "'$B--raw-rpu/-w$N' cannot be used with .bin outputs" 2
-    inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift" "$fix" "$l5" "$cuts_clear" "$output" 1 >/dev/null
+    inject_rpu "$input" "$input_base" "$skip_sync" "$frame_shift" "$fix" "$l5" "$l6" "$cuts_clear" "$output" 1 >/dev/null
   elif [[ "$output_format" == *hevc* ]]; then
-    inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift" "$fix" "$l5" "$cuts_clear" "$output" 1 >/dev/null
+    inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift" "$fix" "$l5" "$l6" "$cuts_clear" "$output" 1 >/dev/null
   else
     output=$(out_file "$input_base" "$output_format" "HYBRID${fix:+"_FIXED"}" "$output" "$CLEAN_FILENAMES")
     [[ -f "$output" ]] && log "Hybrid output file: '$(basename "$output")' already exists, skipping..." && return
 
-    local hevc=$(inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift" "$fix" "$l5" "$cuts_clear")
+    local hevc=$(inject_hevc "$input" "$input_base" "$raw_rpu" "$skip_sync" "$frame_shift" "$fix" "$l5" "$l6" "$cuts_clear")
 
     log "Injecting hybrid base layer: '$(basename "$hevc")' into '$(basename "$input_base")'..." 1
     remux "$input_base" "$output_format" "$output" "$hevc" "$subs" "$title" 0
@@ -1869,7 +2007,7 @@ help1() {
 }
 
 help() {
-  local cmd="$1" s b t q i G bin clean multiple_inputs output_info default_l5 default_plot_info default_output='generated' default_output_format='auto-detected' default_fps
+  local cmd="$1" s b t q i G bin clean multiple_inputs output_info default_l5 default_l6 default_plot_info default_output='generated' default_output_format='auto-detected' default_fps
   local -r description=${cmd_description[$cmd]:-$(cmd_info "$cmd")} formats=$(cmd_info "$cmd" 3)
   [[ "$cmd_options" == *b* ]] && b=1
   [[ "$cmd_options" == *t* ]] && t=1 && multiple_inputs='[ignored when multiple inputs]'
@@ -1881,6 +2019,8 @@ help() {
   [ "$cmd" != 'plot' ] && i=1
   [ "$cmd" = 'info' ] && default_output='<print to console>' && default_plot_info="/$B--frames$N" || output_info="$multiple_inputs"
   [ "$cmd" = 'edl' ] && default_fps='23.976'
+  [ "$cmd" = 'inject' ] && default_l6='keep if present, else auto-detect'
+  [ "$cmd" = 'generate' ] && default_l6='auto-detected'
 
   case "$cmd_options" in
   *F*) help_left+=17 ;;
@@ -1955,6 +2095,11 @@ help() {
   help1 'F' "--l5 <T,B[,L,R]>            ${G:+"Set "}Dolby Vision L5 active area offsets
                                          [defaults: $B${default_l5:-"L=0, R=0"}$N]
                                          <Top, Bottom, Left, Right>"
+  help1 'F' "--l6 <MAX_CLL,MAX_FALL>     ${G:+"Set "}Dolby Vision L6 MaxCLL/MaxFALL
+                                         ${default_l6:+"[default: $B$default_l6$N]"}"
+  help1 'S' "--l6-source <FILE>          File path to use for L6 MaxCLL/FALL detection
+                                         [supported formats: ${B}.mkv, .mp4, .m2ts, .ts, .hevc, .bin$N]
+                                         [ignored if $B--l6$N is set]"
   help1 'H' "--cuts-clear <FS-FE[,...]>  Clear scene-cut flag in specified frame ranges"
   help1 'F' "--cuts-first <0|1>          Force first frame as scene-cut [default: $B$FIX_CUTS_FIRST$N]"
   help1 'F' "--cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: $B$FIX_CUTS_CONSEC$N]"
@@ -2217,7 +2362,7 @@ parse_args() {
 
   local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir sample_duration
   local frames frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto timestamps
-  local l5 cuts_clear cuts_first cuts_consecutive json prores_profile tuning fps mdl scene_cuts variable_l5
+  local l5 cuts_clear cuts_first cuts_consecutive json prores_profile tuning fps mdl scene_cuts variable_l5 l6_source l6
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2248,13 +2393,15 @@ parse_args() {
     -m | --clean-filenames) clean_filenames=$(parse_option "$2" "$clean_filenames" "$cmd" "$1" 'm' '0, 1') ;;
     -r | --hevc)                       hevc=$(parse_file "$2" "$hevc" "$cmd" "$1" 'r' '.hevc') ;;
     -j | --json)                       json=$(parse_file "$2" "$json" "$cmd" "$1" 'F' '.json') ;;
-    --variable-l5)              variable_l5=$(parse_file "$2" "$variable_l5" "$cmd" "$1" 'G' '.json') ;;
     --scene-cuts)                scene_cuts=$(parse_file "$2" "$scene_cuts" "$cmd" "$1" 'G' '.txt .edl') ;;
+    --variable-l5)              variable_l5=$(parse_file "$2" "$variable_l5" "$cmd" "$1" 'G' '.json') ;;
+    --l6-source)                  l6_source=$(parse_file "$2" "$l6_source" "$cmd" "$1" 'S' '.mkv .mp4 .m2ts .ts .hevc .bin') ;;
     --analysis-tuning)               tuning=$(parse_option "$2" "$tuning" "$cmd" "$1" 'G' '0, legacy, 1, most, 2, more, 3, balanced, 4, less, 5, least') ;;
     --mdl)                              mdl=$(parse_option "$2" "$mdl" "$cmd" "$1" 'G' '7, P3_4000, 8, BT_4000, 20, P3_1000, 21, BT_1000, 30, P3_2000, 31, BT_2000', '([78]|[23][01]|(bt|p3)_[124]000)') ;;
     --fps)                              fps=$(parse_option "$2" "$fps" "$cmd" "$1" 'I' '<frame-rate>' '[0-9]{1,5}([./][0-9]{1,5})?') ;;
     --prores-profile)        prores_profile=$(parse_option "$2" "$prores_profile" "$cmd" "$1" 'P' '0, 1, 2, 3, 4, 5') ;;
     --l5)                                l5=$(parse_option "$2" "$l5" "$cmd" "$1" 'F' '<offset>' '[0-9]+' 1 '2|4') ;;
+    --l6)                                l6=$(parse_option "$2" "$l6" "$cmd" "$1" 'F' '<nits-number>' '[0-9]+' 1) ;;
     --cuts-clear)                cuts_clear=$(parse_option "$2" "$cuts_clear" "$cmd" "$1" 'H' '<frame-range>' '[0-9]+(-[0-9]+)?' 1) ;;
     --cuts-first)                cuts_first=$(parse_option "$2" "$cuts_first" "$cmd" "$1" 'F' '0, 1') ;;
     --cuts-consecutive)    cuts_consecutive=$(parse_option "$2" "$cuts_consecutive" "$cmd" "$1" 'F' '0, 1') ;;
@@ -2298,6 +2445,7 @@ parse_args() {
   fi
 
   [[ -n "$variable_l5" && -n "$l5" && -s "$variable_l5" ]] && l5=$(option_ignored "$l5" '--l5' "has no effect when $B--variable_l5$N is set")
+  [[ -n "$l6_source" && -n "$l6" && -s "$l6_source" ]] && l6_source=$(option_ignored "$l6_source" '--l6_source' "has no effect when $B--l6$N is set")
 
   [[ -n "$out_dir" ]] && OUT_DIR="$out_dir"
   [[ -n "$tmp_dir" ]] && TMP_DIR="$tmp_dir"
@@ -2349,9 +2497,9 @@ parse_args() {
     plot) plot "$input" "$sample" "$explicit_plot" "" "$output" 1 ;;
     frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
-    fix) fix_rpu "$input" 0 "$cuts_clear" "$l5" "" "" "$json" "$output" >/dev/null ;;
-    generate) generate "$input" "$scene_cuts" "$mdl" "$fps" "$l5" "$variable_l5" "$output" >/dev/null ;;
-    inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$l5" "$cuts_clear" "$output_format" "$output" "$subs" "$title" ;;
+    fix) fix_rpu "$input" 0 "$cuts_clear" "$l5" "$l6" "" "$l6_source" "$json" "$output" >/dev/null ;;
+    generate) generate "$input" "$scene_cuts" "$mdl" "$fps" "$l5" "$variable_l5" "$l6" "$output" >/dev/null ;;
+    inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$l5" "$l6" "$cuts_clear" "$output_format" "$output" "$subs" "$title" ;;
     remux) remux "$input" "$output_format" "$output" "$hevc" "$subs" "$title" ;;
     extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
     cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;

@@ -203,6 +203,8 @@ Options:
   -t, --input-type <TYPE>         Filter files by type in dir inputs
   -o, --output <OUTPUT>           Output file path [default: generated]
       --l5 <T,B[,L,R]>            Set Dolby Vision L5 active area offsets
+      --l6 <MAX_CLL,MAX_FALL>     Set Dolby Vision L6 MaxCLL/MaxFALL
+      --l6-source <FILE>          File path to use for L6 MaxCLL/FALL detection
       --cuts-clear <FS-FE[,...]>  Clear scene-cut flag in specified frame ranges
       --cuts-first <0|1>          Force first frame as scene-cut [default: 1]
       --cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: 1]
@@ -231,6 +233,7 @@ Options:
       --variable-l5 <FILE>        JSON L5 metadata config file path
       --variable-l5-example       Show example JSON for --variable-l5 option
       --l5 <T,B[,L,R]>            Dolby Vision L5 active area offsets
+      --l6 <MAX_CLL,MAX_FALL>     Dolby Vision L6 MaxCLL/MaxFALL
       --cuts-first <0|1>          Force first frame as scene-cut [default: 1]
       --cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: 1]
   -n, --info <0|1>                Controls intermediate info commands [default: 1]
@@ -254,6 +257,7 @@ Options:
   -l, --rpu-levels <L1[,...]>     RPU levels to inject [default: 3,8,9,11,254]
   -w, --raw-rpu                   Inject input RPU instead of transferring levels
       --l5 <T,B[,L,R]>            Set Dolby Vision L5 active area offsets
+      --l6 <MAX_CLL,MAX_FALL>     Set Dolby Vision L6 MaxCLL/MaxFALL
       --cuts-clear <FS-FE[,...]>  Clear scene-cut flag in specified frame ranges
       --cuts-first <0|1>          Force first frame as scene-cut [default: 1]
       --cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: 1]

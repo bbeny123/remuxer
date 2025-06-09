@@ -41,6 +41,8 @@ _remuxer_complete() {
   case "$prev" in
   -[ib] | --input | --base-input)
     _remuxer_complete_path "$cur" "$formats" && return ;;
+  --l6-source)
+    _remuxer_complete_path "$cur" "mkv mp4 m2ts ts hevc bin" && return ;;
   --scene-cuts)
     _remuxer_complete_path "$cur" "txt edl" && return ;;
   -r | --hevc)
@@ -98,9 +100,9 @@ _remuxer_complete() {
   plot) options="--formats --input-type --output --sample --plot" ;;
   frame-shift) options="--base-input" ;;
   sync) options="--base-input --output --frame-shift --info --plot" ;;
-  fix) options="--formats --input-type --output --info --l5 --cuts-clear --cuts-first --cuts-consecutive --json --json-examples" ;;
-  generate) options="--formats --input-type --output --sample --info --plot --prores-profile --scene-cuts --analysis-tuning --fps --mdl --l5 --variable-l5 --variable-l5-example --cuts-clear --cuts-first --cuts-consecutive" ;;
-  inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames --l5 --cuts-clear --cuts-first --cuts-consecutive" ;;
+  fix) options="--formats --input-type --output --info --l5 --l6 --l6-source --cuts-clear --cuts-first --cuts-consecutive --json --json-examples" ;;
+  generate) options="--formats --input-type --output --sample --info --plot --prores-profile --scene-cuts --analysis-tuning --fps --mdl --l5 --variable-l5 --l6 --variable-l5-example --cuts-clear --cuts-first --cuts-consecutive" ;;
+  inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames --l5 --l6 --cuts-clear --cuts-first --cuts-consecutive" ;;
   remux) options="--formats --input-type --output --output-format --subs --find-subs --copy-subs --copy-audio --hevc --title --auto-title --auto-tracks --clean-filenames" ;;
   extract) options="--formats --input-type --output --output-format --sample --prores-profile --info --plot" ;;
   cuts) options="--formats --input-type --output --sample" ;;

@@ -22,7 +22,7 @@
 - **Shell tab-completion:** suggests only files with matching extensions
 - Bug fixes
 - Logging improvements
-- Updated for `dovi_tool 2.2.0+` features
+- Updated for `dovi_tool 2.3.0` features
 
 ### 1.0.3
 
