@@ -10,13 +10,13 @@ readonly START_TIME=$(date +%s%1N)
 readonly DEBUG_LOG='0'
 readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/tools"
 
-alias jq="'$TOOLS_DIR/jq-win64.exe'"                                         # v1.7.1: https://jqlang.org/download/
-alias mediainfo="'$TOOLS_DIR/MediaInfo.exe'"                                 # v25.04: https://mediaarea.net/pl/MediaInfo/Download
-alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel error"   # v7.1.1: https://ffmpeg.org/download.html
-alias mkvmerge="'$TOOLS_DIR/mkvtoolnix/mkvmerge.exe'"                        # v92.0:  https://mkvtoolnix.download/downloads.html
-alias mkvextract="'$TOOLS_DIR/mkvtoolnix/mkvextract.exe'"                    #
-alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                                 # v2.3.0: https://github.com/quietvoid/dovi_tool/releases
-alias cm_analyze="'$TOOLS_DIR/cm_analyze.exe'"                               # v5.6.1: https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools
+alias jq="'$TOOLS_DIR/jq-win64.exe'"                                       # v1.7.1: https://jqlang.org/download/
+alias mediainfo="'$TOOLS_DIR/MediaInfo.exe'"                               # v25.04: https://mediaarea.net/pl/MediaInfo/Download
+alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel error" # v7.1.1: https://ffmpeg.org/download.html
+alias mkvmerge="'$TOOLS_DIR/mkvtoolnix/mkvmerge.exe'"                      # v92.0:  https://mkvtoolnix.download/downloads.html
+alias mkvextract="'$TOOLS_DIR/mkvtoolnix/mkvextract.exe'"                  #
+alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                               # v2.3.0: https://github.com/quietvoid/dovi_tool/releases
+alias cm_analyze="'$TOOLS_DIR/cm_analyze.exe'"                             # v5.6.1: https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools
 
 OUT_DIR="$(pwd)"
 PLOTS_DIR=""                     # <empty> - same as OUT_DIR
@@ -913,12 +913,12 @@ edl() {
 l6_mdl_safe() {
   local mdl_min="$1" mdl_max="$2"
 
-  if (( mdl_min == 0 && mdl_max == 0 )); then
+  if ((mdl_min == 0 && mdl_max == 0)); then
     mdl_min=1 && mdl_max=1000
-  elif (( mdl_min == 0 )); then
-    (( mdl_max == 4000 )) && mdl_min=50 || mdl_min=1
-  elif (( mdl_max == 0 )); then
-    (( mdl_min == 50 )) && mdl_max=4000 || mdl_max=1000
+  elif ((mdl_min == 0)); then
+    ((mdl_max == 4000)) && mdl_min=50 || mdl_min=1
+  elif ((mdl_max == 0)); then
+    ((mdl_min == 50)) && mdl_max=4000 || mdl_max=1000
   fi
 
   echo "$mdl_min,$mdl_max"
@@ -995,7 +995,7 @@ forced_l6() {
 forced_l6_source() {
   local l6_source="$1" default_mdl_min="$2" default_mdl_max="$3" l6 fallback mdl_min mdl_max max_cll max_fall
 
-  IFS='|' read -r l6 fallback < <(detect_l6 "$l6_source" 0)
+  check_extension "$l6_source" '.mov' || IFS='|' read -r l6 fallback < <(detect_l6 "$l6_source" 0)
   IFS='|' read -r l6 fallback < <(detect_l6 "$l6_source" 1 "" "$l6" "$fallback")
   [ -z "$l6" ] && l6="$fallback"
   [ -z "$l6" ] && log_t "%s $B--l6-source$N contains invalid L6 metadata, skipping" "$(yellow 'Warning:')" && return
