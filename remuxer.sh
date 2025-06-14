@@ -924,18 +924,18 @@ l6_mdl_safe() {
   echo "$mdl_min,$mdl_max"
 }
 
-video_l6() {
-  local input="$1" mdl mdl_min=0 mdl_max=0 max_cll=0 max_fall=0
-  check_extension "$input" ".bin" && echo "0,0,0,0" && return
+rpu_l6_from_l1() {
+  local rpu=$(rpu_or_sample "$1") mdl_min="$2" mdl_max="$3" l1 max_cll=0 max_fall=0
 
-  IFS='|' read -r mdl max_cll max_fall < <(mediainfo "$input" --Inform='Video;%MasteringDisplay_Luminance%|%MaxCLL%|%MaxFALL%\n' | tr -d '\r')
+  l1=$(dovi_tool info -s "$rpu" 2>&1 | grep 'RPU content light level')
 
-  [[ "$mdl" =~ (min: [0-9]+\.([0-9]+)) ]] && mdl_min=$((10#${BASH_REMATCH[2]}))
-  [[ "$mdl" =~ (max: ([0-9]+)) ]] && mdl_max=$((10#${BASH_REMATCH[2]}))
-  [[ "$max_cll" =~ ^([0-9]+) ]] && max_cll=$((10#${BASH_REMATCH[1]}))
-  [[ "$max_fall" =~ ^([0-9]+) ]] && max_fall=$((10#${BASH_REMATCH[1]}))
+  [[ "$l1" =~ (MaxCLL: ([0-9]+)) ]] && max_cll=$((10#${BASH_REMATCH[2]}))
+  [[ "$l1" =~ (MaxFALL: ([0-9]+)) ]] && max_fall=$((10#${BASH_REMATCH[2]}))
 
-  echo "$mdl_min,$mdl_max,$max_cll,$max_fall"
+  ((max_cll == 0 && max_fall == 0)) && echo "0,0,0,0" && return
+  ((mdl_min == 0 && mdl_max == 0 && max_cll >= 2000)) && mdl_max=4000
+
+  echo "$(l6_mdl_safe "$mdl_min" "$mdl_max"),$max_cll,$max_fall"
 }
 
 rpu_l6() {
@@ -950,6 +950,20 @@ rpu_l6() {
 
   [[ "$l6" =~ (MaxCLL: ([0-9]+)) ]] && max_cll=$((10#${BASH_REMATCH[2]}))
   [[ "$l6" =~ (MaxFALL: ([0-9]+)) ]] && max_fall=$((10#${BASH_REMATCH[2]}))
+
+  echo "$mdl_min,$mdl_max,$max_cll,$max_fall"
+}
+
+video_l6() {
+  local input="$1" mdl mdl_min=0 mdl_max=0 max_cll=0 max_fall=0
+  check_extension "$input" ".bin" && echo "0,0,0,0" && return
+
+  IFS='|' read -r mdl max_cll max_fall < <(mediainfo "$input" --Inform='Video;%MasteringDisplay_Luminance%|%MaxCLL%|%MaxFALL%\n' | tr -d '\r')
+
+  [[ "$mdl" =~ (min: [0-9]+\.([0-9]+)) ]] && mdl_min=$((10#${BASH_REMATCH[2]}))
+  [[ "$mdl" =~ (max: ([0-9]+)) ]] && mdl_max=$((10#${BASH_REMATCH[2]}))
+  [[ "$max_cll" =~ ^([0-9]+) ]] && max_cll=$((10#${BASH_REMATCH[1]}))
+  [[ "$max_fall" =~ ^([0-9]+) ]] && max_fall=$((10#${BASH_REMATCH[1]}))
 
   echo "$mdl_min,$mdl_max,$max_cll,$max_fall"
 }
@@ -1030,7 +1044,8 @@ to_l6() {
 
   [ -n "$l6" ] && echo "$l6" && return
   ((max_cll != 0 && max_fall != 0)) && echo "$(l6_mdl_safe "$mdl_min" "$mdl_max"),$max_cll,$max_fall" && return
-  [ -n "$fallback" ] && echo "$fallback"
+  [ -n "$fallback" ] && echo "$fallback" && return
+  rpu_l6_from_l1 "$rpu" "$mdl_min" "$mdl_max"
 }
 
 fix_rpu_l6() {
