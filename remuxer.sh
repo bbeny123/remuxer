@@ -1084,6 +1084,7 @@ fix_rpu_cuts_consecutive() {
 
 fix_rpu_cuts() {
   local rpu="$1" cuts_clear="$2" json="$3" quiet="$4" cuts=() cut config range
+  [ -n "$json" ] && quiet=1
 
   [ -n "$cuts_clear" ] && for range in ${cuts_clear//,/ }; do
     [[ "$range" != *-* ]] && range+="-$range"
