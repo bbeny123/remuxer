@@ -269,7 +269,7 @@ file_exists() {
 }
 
 dovi_input() {
-  local -r input=$(to_rpu "$1" "$2" 1)
+  local -r input=$(rpu_or_sample "$1" 1)
   ! dovi_tool info -s "$input" 2>&1 | grep -q 'No RPU found'
 }
 
@@ -284,8 +284,8 @@ cm29_input() {
 }
 
 p7_input() {
-  local -r input=$(to_rpu "$1" "$2" 1)
-  dovi_tool info -s "$input" | grep -q 'Profile: 7'
+  local -r input=$(rpu_or_sample "$1" 1)
+  dovi_tool info -s "$input" 2>&1 | grep -q 'Profile: 7'
 }
 
 rpu_frames() {
@@ -334,13 +334,14 @@ to_prores() {
 }
 
 to_hevc() {
-  local input="$1" short_sample="$2" output="$3" out_dir="$4" prefix='HEVC' type='Base layer' ffmpeg_cmd=()
+  local input="$1" bl_only="$2" short_sample="$3" output="$4" out_dir="$5" prefix='HEVC' type='HEVC' ffmpeg_cmd=()
 
   file_exists "$input" 'input' 1
-  [ "$short_sample" != 1 ] && check_extension "$input" ".hevc" && echo "$input" && return
+  [[ "$short_sample" != 1 && "$bl_only" != 1 ]] && check_extension "$input" ".hevc" && echo "$input" && return
   check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc' 1
 
   [ "$FFMPEG_STRICT" = 1 ] && ffmpeg_cmd+=(-strict -2)
+  [ "$bl_only" = 1 ] && prefix+="-BL_ONLY" && type+=" BL"
 
   if [ "$short_sample" = 1 ]; then
     prefix+="-${EXTRACT_SHORT_SEC}s"
@@ -352,13 +353,19 @@ to_hevc() {
   output=$(generate_file "$out_dir" "$input" 'hevc' "$prefix" "$output")
 
   local -r input_name=$(basename "$input")
-  log "Extracting ${type,,} for: '$input_name' ..." 1
+  log_t "Extracting %s for: '%s'..." "$type" "$input_name"
 
   if [[ ! -f "$output" ]]; then
-    ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc "$output" >&2
-    log "$type for: '$input_name' extracted - output file: '$output'" 1
+    if [ "$bl_only" != 1 ]; then
+      ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc "$output" >&2
+    elif check_extension "$input" ".hevc"; then
+      dovi_tool demux -b "$output" -e "$(tmp_file "$input" 'hevc' "EL")" "$input" >&2
+    else
+      ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc - | dovi_tool demux -b "$output" -e "$(tmp_file "$input" 'hevc' "EL")" - >&2
+    fi
+    log_t "%s for: '%s' extracted - output file: '%s'" "$type" "$input_name" "$output"
   else
-    log "The .hevc file: '$output' already exists, skipping..."
+    logf "The HEVC file: '%s' already exists, skipping..." "$output"
   fi
 
   echo "$output"
@@ -423,7 +430,7 @@ extract() {
   [[ -z "$output_format" && "$output" == *.* ]] && output_format="${output##*.}"
 
   if [[ "${output_format,,}" == *hevc* ]]; then
-    to_hevc "$input" "$short_sample" "$output" 1 >/dev/null
+    to_hevc "$input" 0 "$short_sample" "$output" 1 >/dev/null
   elif [[ "${output_format,,}" == *mov* ]]; then
     to_prores "$input" "$short_sample" "$output" >/dev/null
   else
@@ -1628,10 +1635,10 @@ inject_rpu() {
 }
 
 inject_hevc() {
-  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" fix="$6" l5="$7" l6="$8" cuts_clear="$9" output="${10}" exit_if_exists="${11}" rpu_type='Raw' rpu_injected
+  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" fix="$6" l5="$7" l6="$8" cuts_clear="$9" output="${10}" exit_if_exists="${11}" rpu_type='Raw' rpu_injected bl_only=0
 
   output=$(out_hybrid "$input" "$input_base" 'hevc' "$output" "$fix" "$raw_rpu")
-  log "Creating hybrid base layer: '$(basename "$output")'..." 1
+  log_t "Creating hybrid base layer: '%s'..." "$(basename "$output")"
 
   if [[ ! -f "$output" ]]; then
     if [ "$raw_rpu" != 1 ]; then
@@ -1641,7 +1648,7 @@ inject_hevc() {
     elif [ "$skip_sync" != 1 ]; then
       rpu_injected=$(sync_rpu "$input" "$input_base" "$frame_shift" 1)
     else
-      log "Skipping raw RPU sync..." 1
+      log_t "Skipping raw RPU sync..."
       rpu_injected=$(to_rpu "$input")
       [ "$INFO_INTERMEDIATE" = 1 ] && info "$rpu_injected" >&2
     fi
@@ -1652,61 +1659,62 @@ inject_hevc() {
       rpu_injected="$rpu_fixed"
     fi
 
-    local -r hevc=$(to_hevc "$input_base") base_name=$(basename "$input_base")
+    [ "$raw_rpu" = 1 ] && ! p7_input "$rpu_injected" && p7_input "$input_base" && bl_only=1
 
-    log "Injecting ${rpu_type,,} RPU: '$(basename "$rpu_injected")' into base layer of '$base_name' ..." 1 && log ""
+    local -r hevc=$(to_hevc "$input_base" "$bl_only") basename=$(basename "$input_base") rpu_basename=$(basename "$rpu_injected")
+    log_c "Injecting %s RPU: '%s' into base layer of '%s'..." "${rpu_type,,}" "$rpu_basename" "$basename"
 
     dovi_tool inject-rpu -r "$rpu_injected" -o "$output" "$hevc" >&2
 
-    [[ ! "$input_base" -ef "$hevc" ]] && rm "$hevc" && log "Intermediate base layer: '$(basename "$hevc")' removed" 1
+    [[ ! "$input_base" -ef "$hevc" ]] && rm "$hevc" && log_t "Intermediate base layer: '%s' removed" "$(basename "$hevc")"
 
-    log "$rpu_type RPU: '$(basename "$rpu_injected")' successfully injected into base layer of '$base_name' - output file: '$output'" 1
+    log_t "%s RPU: '%s' successfully injected into base layer of '%s' - output file: '%s'" "$rpu_type" "$rpu_basename" "$basename" "$output"
   elif [ "$exit_if_exists" = 1 ]; then
     log_kill "The hybrid base layer: '$output' already exists" 2
   else
-    log "The hybrid base layer: '$output' already exists, skipping..."
+    logf "The hybrid base layer: '%s' already exists, skipping..." "$output"
   fi
 
   echo "$output"
 }
 
 mp4_unremuxable() {
-  local -r base_file="$1" hevc="$2" short_sample="$3" input_type="${4:-'--base-input/-b'}"
+  local -r base_file="$1" hevc="$2" input_type="${3:-'--base-input/-b'}"
 
   [[ -z "$hevc" ]] && check_extension "$base_file" '.mp4' && return 0
   [[ -n "$(audio_info "$base_file" 0 1)" ]] && echo "'$B$input_type$N' contains lossless audio" && return 1
-  [[ -n "$hevc" ]] && p7_input "$hevc" "$short_sample" && echo "'--hevc/-r' contains Dolby Vision Profile 7 layer" && return 1
-  [[ -z "$hevc" ]] && p7_input "$base_file" "$short_sample" && echo "'$B$input_type$N' contains Dolby Vision Profile 7 layer" && return 1
+  [[ -n "$hevc" ]] && p7_input "$hevc" && echo "'--hevc/-r' contains Dolby Vision Profile 7 layer" && return 1
+  [[ -z "$hevc" ]] && p7_input "$base_file" && echo "'$B$input_type$N' contains Dolby Vision Profile 7 layer" && return 1
 
   return 0
 }
 
 mp4_preferred() {
-  local -r input="$1" hevc="$2" short_sample="$3"
+  local -r input="$1" hevc="$2"
 
-  dovi_input "${hevc:-"$input"}" "$short_sample" && [[ -z "$(mp4_unremuxable "$input" "$hevc" "$short_sample")" ]]
+  dovi_input "${hevc:-"$input"}" && [[ -z "$(mp4_unremuxable "$input" "$hevc")" ]]
 }
 
 auto_target_format() {
-  local -r input="$1" hevc="$2" short_sample="$3" input_type="${4:-"--base-input/-b"}"
+  local -r input="$1" hevc="$2" input_type="${3:-"--base-input/-b"}"
 
   [[ "$input" != *.* ]] && log_kill "Cannot deduce target format ('$B$input_type$N' have no extension)" 2
 
   local -r target_format="${input##*.}"
 
   check_extension "$target_format" ".m2ts .ts" && target_format='mkv'
-  check_extension "$target_format" '.mkv' && mp4_preferred "$input" "$hevc" "$short_sample" && echo "mp4" && return 0
+  check_extension "$target_format" '.mkv' && mp4_preferred "$input" "$hevc" && echo "mp4" && return 0
 
   echo "${target_format,,}"
 }
 
 target_format() {
-  local input="$1" target_format="$2" output="$3" valid_extensions="$4" short_sample="$5" hevc="$6" input_type="${7:-"--base-input/-b"}" type="'$B--output-format/-e$N'"
+  local input="$1" target_format="$2" output="$3" valid_extensions="$4" hevc="$5" input_type="${6:-"--base-input/-b"}" type="'$B--output-format/-e$N'"
 
   [[ -z "$target_format" && "$output" == *.* ]] && target_format="${output##*.}" && type="'$B--output/-o$N' format"
 
   if [[ -z "$target_format" ]]; then
-    auto_target_format "$input" "$hevc" "$short_sample" "$input_type"
+    auto_target_format "$input" "$hevc" "$input_type"
     return 0
   fi
 
@@ -1722,7 +1730,7 @@ target_format() {
     if ! check_extension "$input" ".mkv .mp4 .m2ts .ts"; then
       log_kill "Invalid $type: '$target_format' is incompatible with .${input##*.} '$B$input_type$N'" 2
     elif check_extension "$target_format" ".mp4"; then
-      local -r unremuxable_reason=$(mp4_unremuxable "$input" "$hevc" "$short_sample" "$input_type")
+      local -r unremuxable_reason=$(mp4_unremuxable "$input" "$hevc" "$input_type")
       [[ -n "$unremuxable_reason" ]] && log_kill "Invalid $type: '$target_format' ($unremuxable_reason)" 2
     fi
 
@@ -1889,7 +1897,7 @@ remux() {
   [[ -n "$hevc" ]] && check_extension "$hevc" '.hevc' 1
 
   if [[ -z "$output_format" || "$validate_output_format" != 0 ]]; then
-    output_format=$(target_format "$input" "$output_format" "$output" '.mkv .mp4' 1 "$hevc" "--input/-i")
+    output_format=$(target_format "$input" "$output_format" "$output" '.mkv .mp4' "$hevc" "--input/-i")
   fi
 
   output=$(out_file "$input" "$output_format" "REMUXED" "$output" "$CLEAN_FILENAMES")
