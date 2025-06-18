@@ -1309,7 +1309,7 @@ fix_scene_cuts() {
 }
 
 generate_variable_l5() {
-  local prores="$1" scene_cuts="$2" mdl="$3" fps="$4" variable_l5="$5" xml="$6" presets=() cuts=() edits l5 range cuts_dynamic cuts_tmp xml_first xml_mid xml_tmp
+  local prores="$1" scene_cuts="$2" mdl="$3" fps="$4" variable_l5="$5" xml="$6" presets=() cuts=() edits l5 preset range cuts_dynamic cuts_tmp xml_first xml_mid xml_tmp
   local -i id from to i=0
 
   while read -r from; do
@@ -1339,11 +1339,11 @@ generate_variable_l5() {
 
   while read -r range id; do
     from=${range%-*}
-    read -ra l5 <<<"${presets["$id"]}"
+    read -ra preset <<<"${presets["$id"]}"
 
     awk -v f="$from" '$0 == f {p=1} p' "$cuts_dynamic" >"$cuts_tmp" && mv "$cuts_tmp" "$cuts_dynamic"
 
-    if ! cm_analyze -s "$cuts_dynamic" -m "$mdl" -r "$fps" --source-format "pq bt2020" -f "$range" --letterbox "${l5[@]}" --analysis-tuning "$L1_TUNING" "$prores" "$xml_tmp"; then
+    if ! cm_analyze -s "$cuts_dynamic" -m "$mdl" -r "$fps" --source-format "pq bt2020" -f "$range" --letterbox "${preset[@]}" --analysis-tuning "$L1_TUNING" "$prores" "$xml_tmp"; then
       log_t "%s Failed to generate DV P8 RPU xml for range '%s', skipping..." "$(red 'Error:')" "$range" && return 1
     fi
 
@@ -1360,8 +1360,11 @@ generate_variable_l5() {
 }
 
 generate() {
-  local input="$1" scene_cuts="$2" mdl="$3" fps="$4" l5="$5" variable_l5="$6" l6="$7" output="$8" mov_input prores xml l6 l5_top l5_bottom l5_left l5_right l5_config
+  local input="$1" scene_cuts="$2" mdl="$3" fps="$4" l5="$5" l5_a="$6" l5v="$7" l5v_a="$8" l6="$9" output="${10}" mov_input prores xml l6 l5_top l5_bottom l5_left l5_right
   check_extension "$input" '.mov' && mov_input=1
+
+  [ -z "$l5_a" ] && l5_a="$l5" && [ -z "$l5" ] && l5="auto"
+  [ -z "$l5v_a" ] && l5v_a="$l5v"
 
   log_t "Generating DV P8 RPU for: '%s'..." "$(basename "$input")"
   output=$(out_file "$input" "bin" 'GENERATED' "$output")
@@ -1370,9 +1373,11 @@ generate() {
   IFS='|' read -r mdl fps < <(mdl_fps "$input" "$mdl" "$fps")
   [[ -z "$mdl" || -z "$fps" ]] && return
 
-  { read -r scene_cuts; read -r l5; } < <(scene_cuts_l5 "$input" "$scene_cuts" "$l5" "$variable_l5" "$mov_input")
+  { read -r scene_cuts; read -r l5_a; } < <(scene_cuts_l5 "$input" "$scene_cuts" "$l5_a" "$l5v_a" "$mov_input")
   [[ -z "$scene_cuts" ]] && return
-  [[ "$l5" == file:* ]] && l5_config="${l5#file:}"
+
+  [[ "$l5_a" == file:* ]] && l5v_a="${l5_a#file:}" && l5_a="" || l5v_a=""
+  [ "$l5" = 'auto' ] && l5="$l5_a"
 
   prores=$(to_prores "$input")
   scene_cuts=$(fix_scene_cuts "$prores" "$scene_cuts")
@@ -1381,10 +1386,10 @@ generate() {
   if [[ ! -e "$xml" ]]; then
     log_t "Generating DV P8 RPU xml..."
 
-    if [ -n "$l5_config" ]; then
-      ! generate_variable_l5 "$prores" "$scene_cuts" "$mdl" "$fps" "$l5_config" "$xml" && return
+    if [ -n "$l5v_a" ]; then
+      ! generate_variable_l5 "$prores" "$scene_cuts" "$mdl" "$fps" "$l5v_a" "$xml" && return
     else
-      IFS=',' read -r l5_top l5_bottom l5_left l5_right <<<"$l5"
+      IFS=',' read -r l5_top l5_bottom l5_left l5_right <<<"$l5_a"
       if ! cm_analyze -s "$scene_cuts" -m "$mdl" -r "$fps" --source-format "pq bt2020" --letterbox "${l5_left:-0}" "${l5_right:-0}" "${l5_top:-0}" "${l5_bottom:-0}" --analysis-tuning "$L1_TUNING" "$prores" "$xml"; then
         log_t "%s Failed to generate DV P8 RPU xml, skipping..." "$(red 'Error:')" && return
       fi
@@ -1398,7 +1403,7 @@ generate() {
   fi
 
   log_t "Successfully generated DV P8 RPU for: '%s' - output: '%s'" "$(basename "$input")" "$output"
-  output=$(fix_rpu "$output" 1 "" "$l5" "$l6" "$l5_config" "$input")
+  output=$(fix_rpu "$output" 1 "" "$l5" "$l6" "$l5v" "$input")
   [ "$INFO_INTERMEDIATE" = 1 ] && info "$output" >&2
 }
 
@@ -2393,7 +2398,7 @@ parse_args() {
 
   local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir sample_duration
   local frames frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto timestamps
-  local l5 cuts_clear cuts_first cuts_consecutive json prores_profile tuning fps mdl scene_cuts variable_l5 l6_source l6
+  local cuts_clear cuts_first cuts_consecutive json prores_profile tuning fps mdl scene_cuts l5 l5_a l5v l5v_a l6_source l6
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2425,13 +2430,15 @@ parse_args() {
     -r | --hevc)                       hevc=$(parse_file "$2" "$hevc" "$cmd" "$1" 'r' '.hevc') ;;
     -j | --json)                       json=$(parse_file "$2" "$json" "$cmd" "$1" 'F' '.json') ;;
     --cuts)                      scene_cuts=$(parse_file "$2" "$scene_cuts" "$cmd" "$1" 'G' '.txt .edl') ;;
-    --l5v)                      variable_l5=$(parse_file "$2" "$variable_l5" "$cmd" "$1" 'G' '.json') ;;
+    --l5v)                              l5v=$(parse_file "$2" "$l5v" "$cmd" "$1" 'G' '.json') ;;
+    --l5v-analysis)                   l5v_a=$(parse_file "$2" "$l5v_a" "$cmd" "$1" 'G' '.json') ;;
     --l6-source)                  l6_source=$(parse_file "$2" "$l6_source" "$cmd" "$1" 'S' '.mkv .mp4 .m2ts .ts .hevc .bin') ;;
     --tuning)                        tuning=$(parse_option "$2" "$tuning" "$cmd" "$1" 'G' '0, legacy, 1, most, 2, more, 3, balanced, 4, less, 5, least') ;;
     --mdl)                              mdl=$(parse_option "$2" "$mdl" "$cmd" "$1" 'G' '7, P3_4000, 8, BT_4000, 20, P3_1000, 21, BT_1000, 30, P3_2000, 31, BT_2000', '([78]|[23][01]|(bt|p3)_[124]000)') ;;
     --fps)                              fps=$(parse_option "$2" "$fps" "$cmd" "$1" 'I' '<frame-rate>' '[0-9]{1,5}([./][0-9]{1,5})?') ;;
     --profile)               prores_profile=$(parse_option "$2" "$prores_profile" "$cmd" "$1" 'P' '0, 1, 2, 3, 4, 5') ;;
     --l5)                                l5=$(parse_option "$2" "$l5" "$cmd" "$1" 'F' '<offset>' '[0-9]+' 1 '2|4') ;;
+    --l5-analysis)                     l5_a=$(parse_option "$2" "$l5_a" "$cmd" "$1" 'G' '<offset>' '[0-9]+' 1 '2|4') ;;
     --l6)                                l6=$(parse_option "$2" "$l6" "$cmd" "$1" 'F' '<nits-number>' '[0-9]+' 1) ;;
     --cuts-clear)                cuts_clear=$(parse_option "$2" "$cuts_clear" "$cmd" "$1" 'H' '<frame-range>' '[0-9]+(-[0-9]+)?' 1) ;;
     --cuts-first)                cuts_first=$(parse_option "$2" "$cuts_first" "$cmd" "$1" 'F' '0, 1') ;;
@@ -2475,7 +2482,8 @@ parse_args() {
     [[ "$rpu_raw" = 1 ]] && rpu_levels=$(option_ignored "$rpu_levels" '--levels/-l' "has no effect when $B--rpu_raw$N is set")
   fi
 
-  [[ -n "$variable_l5" && -n "$l5" && -s "$variable_l5" ]] && l5=$(option_ignored "$l5" '--l5' "has no effect when $B--variable_l5$N is set")
+  [[ -n "$l5v" && -n "$l5" && -s "$l5v" ]] && l5=$(option_ignored "$l5" '--l5' "has no effect when $B--l5v$N is set")
+  [[ -n "$l5v_a" || -n "$l5v" ]] && [[ -n "$l5_a" ]] && [[ -s "$l5v_a" || -s "$l5v" ]] && l5_a=$(option_ignored "$l5_a" '--l5-analysis' "has no effect when $B--l5v/--l5v-analysis$N is set")
   [[ -n "$l6_source" && -n "$l6" && -s "$l6_source" ]] && l6_source=$(option_ignored "$l6_source" '--l6_source' "has no effect when $B--l6$N is set")
 
   [[ -n "$out_dir" ]] && OUT_DIR="$out_dir"
@@ -2529,7 +2537,7 @@ parse_args() {
     shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
     fix) fix_rpu "$input" 0 "$cuts_clear" "$l5" "$l6" "" "$l6_source" "$json" "$output" >/dev/null ;;
-    generate) generate "$input" "$scene_cuts" "$mdl" "$fps" "$l5" "$variable_l5" "$l6" "$output" >/dev/null ;;
+    generate) generate "$input" "$scene_cuts" "$mdl" "$fps" "$l5" "$l5_a" "$l5v" "$l5v_a" "$l6" "$output" >/dev/null ;;
     inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$l5" "$l6" "$cuts_clear" "$output_format" "$output" "$subs" "$title" ;;
     remux) remux "$input" "$output_format" "$output" "$hevc" "$subs" "$title" ;;
     extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;

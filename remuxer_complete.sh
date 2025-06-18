@@ -47,7 +47,7 @@ _remuxer_complete() {
     _remuxer_complete_path "$cur" "txt edl" && return ;;
   -r | --hevc)
     _remuxer_complete_path "$cur" "hevc" && return ;;
-  -j | --json | --l5v)
+  -j | --json | --l5v | --l5v-analysis)
     _remuxer_complete_path "$cur" "json" && return ;;
   --subs)
     _remuxer_complete_path "$cur" "srt" && return ;;
@@ -68,7 +68,7 @@ _remuxer_complete() {
   --mdl) values="P3_1000 BT_1000 P3_2000 BT_2000 P3_4000 BT_4000" && cur=${cur^^} ;;
   --fps) values="23.976 24000/1001 24 25 30 50 48 60" && [ "$cmd" != 'edl' ] && values+=" 29.97 59.94" ;;
   --profile) values="0 1 2 3 4 5" ;;
-  -[fuk] | --shift | --title | --frames | --time | --l5 | --cuts-clear) return ;;
+  -[fuk] | --shift | --title | --frames | --time | --l5 | --l5-analysis | --cuts-clear) return ;;
   esac
 
   if [[ -n "$all_values" ]]; then
@@ -101,7 +101,7 @@ _remuxer_complete() {
   shift) options="--base-input" ;;
   sync) options="--base-input --output --shift --info --plot" ;;
   fix) options="--formats --input-type --output --info --l5 --l6 --l6-source --cuts-clear --cuts-first --cuts-consecutive --json --json-example" ;;
-  generate) options="--formats --input-type --output --sample --info --plot --profile --cuts --tuning --fps --mdl --l5 --l5v --l6 --l5v-example --cuts-clear --cuts-first --cuts-consecutive" ;;
+  generate) options="--formats --input-type --output --sample --info --plot --profile --cuts --tuning --fps --mdl --l5 --l5-analysis --l5v --l5v-analysis --l6 --l5v-example --cuts-clear --cuts-first --cuts-consecutive" ;;
   inject) options="--base-input --output --output-format --synced --shift --levels --raw-rpu --info --plot --subs --subs-find --subs-copy --audio-copy --title --title-auto --tracks-auto --clean-filenames --l5 --l6 --cuts-clear --cuts-first --cuts-consecutive" ;;
   remux) options="--formats --input-type --output --output-format --subs --subs-find --subs-copy --audio-copy --hevc --title --title-auto --tracks-auto --clean-filenames" ;;
   extract) options="--formats --input-type --output --output-format --sample --profile --info --plot" ;;
