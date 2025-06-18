@@ -3,7 +3,7 @@
 shopt -s expand_aliases
 
 readonly N=$(tput sgr0) B=$(tput bold) U=$(tput smul)
-readonly RED=$(tput setaf 1) YELLOW=$(tput setaf 3)
+readonly RED=$(tput setaf 1) YELLOW=$(tput setaf 3) BLUE=$(tput setaf 4)
 readonly BU="$B$U"
 readonly REMUXER="$B$(basename "$0")$N" VERSION="2.0.0"
 readonly START_TIME=$(date +%s%1N)
@@ -122,6 +122,9 @@ logf() { printf "$1\n" "${@:2}" >&2; }
 log_t() { logf "\n$1" "${@:2}"; }
 log_b() { logf "$1\n" "${@:2}"; }
 log_c() { logf "\n$1\n" "${@:2}"; }
+log_command() {
+  logf "%s $1" "$B${BLUE}Executing:$N" "${@:2}"
+}
 
 log() {
   [ "$2" = 1 ] && echo "" >&2
@@ -321,6 +324,7 @@ to_prores() {
       logf "%s '%s' is not HDR10, default color primaries (yuv420p10le/bt2020nc/bt2020/smpte2084) may be wrong - check input" "$(yellow 'Warning:')" "$input_name"
     fi
 
+    log_command 'ffmpeg -i %s -map 0:v:0 -map_chapters -1 %s -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an %s' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
     if ! ffmpeg -i "$input" -map 0:v:0 -map_chapters -1 "${ffmpeg_cmd[@]}" -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an "$output" >&2; then
       log_kill "$(red 'Error:') Failed to encode '$input' to $type"
     fi
@@ -357,10 +361,13 @@ to_hevc() {
 
   if [[ ! -f "$output" ]]; then
     if [ "$bl_only" != 1 ]; then
+      log_command 'ffmpeg -i %s -map 0:v:0 -c copy %s -f hevc %s' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
       ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc "$output" >&2
     elif check_extension "$input" ".hevc"; then
+      log_command 'dovi_tool demux -b %s %s' "$(basename "$output")" "$input_name"
       dovi_tool demux -b "$output" -e "$(tmp_file "$input" 'hevc' "EL")" "$input" >&2
     else
+      log_command 'ffmpeg -i %s -map 0:v:0 -c copy %s -f hevc - | dovi_tool demux -b %s -' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
       ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc - | dovi_tool demux -b "$output" -e "$(tmp_file "$input" 'hevc' "EL")" - >&2
     fi
     log_t "%s for: '%s' extracted - output file: '%s'" "$type" "$input_name" "$output"
@@ -1343,6 +1350,8 @@ generate_variable_l5() {
 
     awk -v f="$from" '$0 == f {p=1} p' "$cuts_dynamic" >"$cuts_tmp" && mv "$cuts_tmp" "$cuts_dynamic"
 
+    logf && log_command 'cm_analyze -s <cuts-tmp> -m %s -r %s --source-format "pq bt2020" -f %s --letterbox %s --analysis-tuning %s <prores> <output-tmp>' "$mdl" "$fps" "$range" "${preset[*]}" "$L1_TUNING"
+
     if ! cm_analyze -s "$cuts_dynamic" -m "$mdl" -r "$fps" --source-format "pq bt2020" -f "$range" --letterbox "${preset[@]}" --analysis-tuning "$L1_TUNING" "$prores" "$xml_tmp"; then
       log_t "%s Failed to generate DV P8 RPU xml for range '%s', skipping..." "$(red 'Error:')" "$range" && return 1
     fi
@@ -1390,6 +1399,10 @@ generate() {
       ! generate_variable_l5 "$prores" "$scene_cuts" "$mdl" "$fps" "$l5v_a" "$xml" && return
     else
       IFS=',' read -r l5_top l5_bottom l5_left l5_right <<<"$l5_a"
+
+      log_command 'cm_analyze -s %s -m %s -r %s --source-format "pq bt2020" --letterbox %s %s %s %s --analysis-tuning %s <prores> <output>' \
+       "$(basename "$scene_cuts")" "$mdl" "$fps" "${l5_left:-0}" "${l5_right:-0}" "${l5_top:-0}" "${l5_bottom:-0}" "$L1_TUNING"
+
       if ! cm_analyze -s "$scene_cuts" -m "$mdl" -r "$fps" --source-format "pq bt2020" --letterbox "${l5_left:-0}" "${l5_right:-0}" "${l5_top:-0}" "${l5_bottom:-0}" --analysis-tuning "$L1_TUNING" "$prores" "$xml"; then
         log_t "%s Failed to generate DV P8 RPU xml, skipping..." "$(red 'Error:')" && return
       fi
@@ -1847,6 +1860,8 @@ remux_mp4() {
   [[ -n "$title" ]] && ffmpeg_metadata+=(-metadata "title=$title")
 
   [ "$FFMPEG_STRICT" = 1 ] && ffmpeg_copy+=(-strict -2)
+
+  log_command 'ffmpeg %s %s %s %s %s' "${ffmpeg_input[*]}" "${ffmpeg_map[*]}" "${ffmpeg_copy[*]}" "${ffmpeg_metadata[*]}" "$(basename "$output")"
   ffmpeg "${ffmpeg_input[@]}" "${ffmpeg_map[@]}" "${ffmpeg_copy[@]}" "${ffmpeg_metadata[@]}" "$output"
 }
 
@@ -1892,6 +1907,7 @@ remux_mkv() {
   title=$(metadata_title "$input" "$title" "$clean_filename")
   [[ -n "$title" ]] && mkv_merge+=(--title "$title")
 
+  log_command 'mkvmerge %s' "${mkv_merge[*]}"
   mkvmerge "${mkv_merge[@]}"
 }
 
