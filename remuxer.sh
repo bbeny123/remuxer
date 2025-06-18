@@ -1401,7 +1401,7 @@ generate() {
       IFS=',' read -r l5_top l5_bottom l5_left l5_right <<<"$l5_a"
 
       log_command 'cm_analyze -s %s -m %s -r %s --source-format "pq bt2020" --letterbox %s %s %s %s --analysis-tuning %s <prores> <output>' \
-       "$(basename "$scene_cuts")" "$mdl" "$fps" "${l5_left:-0}" "${l5_right:-0}" "${l5_top:-0}" "${l5_bottom:-0}" "$L1_TUNING"
+        "$(basename "$scene_cuts")" "$mdl" "$fps" "${l5_left:-0}" "${l5_right:-0}" "${l5_top:-0}" "${l5_bottom:-0}" "$L1_TUNING"
 
       if ! cm_analyze -s "$scene_cuts" -m "$mdl" -r "$fps" --source-format "pq bt2020" --letterbox "${l5_left:-0}" "${l5_right:-0}" "${l5_top:-0}" "${l5_bottom:-0}" --analysis-tuning "$L1_TUNING" "$prores" "$xml"; then
         log_t "%s Failed to generate DV P8 RPU xml, skipping..." "$(red 'Error:')" && return
