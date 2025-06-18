@@ -26,7 +26,7 @@ _remuxer_complete() {
   cmd="${COMP_WORDS[1]}"
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    mapfile -t COMPREPLY < <(compgen -W "info plot frame-shift sync fix generate inject remux extract cuts subs png mp3 edl" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "info plot shift sync fix generate inject remux extract cuts subs png mp3 edl" -- "$cur")
     return
   fi
 
@@ -43,11 +43,11 @@ _remuxer_complete() {
     _remuxer_complete_path "$cur" "$formats" && return ;;
   --l6-source)
     _remuxer_complete_path "$cur" "mkv mp4 m2ts ts hevc bin" && return ;;
-  --scene-cuts)
+  --cuts)
     _remuxer_complete_path "$cur" "txt edl" && return ;;
   -r | --hevc)
     _remuxer_complete_path "$cur" "hevc" && return ;;
-  -j | --json | --variable-l5)
+  -j | --json | --l5v)
     _remuxer_complete_path "$cur" "json" && return ;;
   --subs)
     _remuxer_complete_path "$cur" "srt" && return ;;
@@ -58,17 +58,17 @@ _remuxer_complete() {
   -x | --formats) values="$formats" ;;
   -e | --output-format) values="$output_formats" ;;
   -t | --input-type) values="shows movies" ;;
-  -l | --rpu-levels) values="1 2 3 4 5 6 8 9 10 11 254 255" ;;
-  -[nm] | --info | --clean-filenames | --find-subs | --auto-title | --auto-tracks | --cuts-first | --cuts-consecutive) values="0 1" ;;
+  -l | --levels) values="1 2 3 4 5 6 8 9 10 11 254 255" ;;
+  -[nm] | --info | --clean-filenames | --subs-find | --title-auto | --tracks-auto | --cuts-first | --cuts-consecutive) values="0 1" ;;
   -p | --plot) all_values="0 1 none all L1 L2 L2_100 L2_600 L2_1000 L2_MAX L8T L8T_100 L8T_600 L8T_1000 L8T_MAX L8S L8S_100 L8S_600 L8S_1000 L8S_MAX L8H L8H_100 L8H_600 L8H_1000 L8H_MAX" ;;
-  -c | --lang-codes) values="pol eng fre ger ita por rus spa chi jpn kor" ;;
-  --copy-subs) values="0 1 pol eng fre ger ita por rus spa chi jpn kor" ;;
-  --copy-audio) values="1 2 3" ;;
-  --analysis-tuning) values="legacy most more balanced less least" ;;
+  -c | --lang) values="pol eng fre ger ita por rus spa chi jpn kor" ;;
+  --subs-copy) values="0 1 pol eng fre ger ita por rus spa chi jpn kor" ;;
+  --audio-copy) values="1 2 3" ;;
+  --tuning) values="legacy most more balanced less least" ;;
   --mdl) values="P3_1000 BT_1000 P3_2000 BT_2000 P3_4000 BT_4000" && cur=${cur^^} ;;
   --fps) values="23.976 24000/1001 24 25 30 50 48 60" && [ "$cmd" != 'edl' ] && values+=" 29.97 59.94" ;;
-  --prores-profile) values="0 1 2 3 4 5" ;;
-  -[fuk] | --frame-shift | --title | --frames | --time | --l5 | --cuts-clear) return ;;
+  --profile) values="0 1 2 3 4 5" ;;
+  -[fuk] | --shift | --title | --frames | --time | --l5 | --cuts-clear) return ;;
   esac
 
   if [[ -n "$all_values" ]]; then
@@ -98,15 +98,15 @@ _remuxer_complete() {
   case "$cmd" in
   info) options="--formats --input-type --output --frames --sample --plot" ;;
   plot) options="--formats --input-type --output --sample --plot" ;;
-  frame-shift) options="--base-input" ;;
-  sync) options="--base-input --output --frame-shift --info --plot" ;;
-  fix) options="--formats --input-type --output --info --l5 --l6 --l6-source --cuts-clear --cuts-first --cuts-consecutive --json --json-examples" ;;
-  generate) options="--formats --input-type --output --sample --info --plot --prores-profile --scene-cuts --analysis-tuning --fps --mdl --l5 --variable-l5 --l6 --variable-l5-example --cuts-clear --cuts-first --cuts-consecutive" ;;
-  inject) options="--base-input --output --output-format --skip-sync --frame-shift --rpu-levels --raw-rpu --info --plot --subs --find-subs --copy-subs --copy-audio --title --auto-title --auto-tracks --clean-filenames --l5 --l6 --cuts-clear --cuts-first --cuts-consecutive" ;;
-  remux) options="--formats --input-type --output --output-format --subs --find-subs --copy-subs --copy-audio --hevc --title --auto-title --auto-tracks --clean-filenames" ;;
-  extract) options="--formats --input-type --output --output-format --sample --prores-profile --info --plot" ;;
+  shift) options="--base-input" ;;
+  sync) options="--base-input --output --shift --info --plot" ;;
+  fix) options="--formats --input-type --output --info --l5 --l6 --l6-source --cuts-clear --cuts-first --cuts-consecutive --json --json-example" ;;
+  generate) options="--formats --input-type --output --sample --info --plot --profile --cuts --tuning --fps --mdl --l5 --l5v --l6 --l5v-example --cuts-clear --cuts-first --cuts-consecutive" ;;
+  inject) options="--base-input --output --output-format --synced --shift --levels --raw-rpu --info --plot --subs --subs-find --subs-copy --audio-copy --title --title-auto --tracks-auto --clean-filenames --l5 --l6 --cuts-clear --cuts-first --cuts-consecutive" ;;
+  remux) options="--formats --input-type --output --output-format --subs --subs-find --subs-copy --audio-copy --hevc --title --title-auto --tracks-auto --clean-filenames" ;;
+  extract) options="--formats --input-type --output --output-format --sample --profile --info --plot" ;;
   cuts) options="--formats --input-type --output --sample" ;;
-  subs) options="--input-type --output --lang-codes --clean-filenames" ;;
+  subs) options="--input-type --output --lang --clean-filenames" ;;
   png) options="--formats --input-type --output --time" ;;
   mp3) options="--formats --input-type --output --sample" ;;
   edl) options="--formats --input-type --output --fps" ;;

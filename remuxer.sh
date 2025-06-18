@@ -41,23 +41,23 @@ PRORES_MACOS='2'
 EXTRACT_SHORT_SEC='23'
 
 declare -A commands=(
-  [info]="       Show Dolby Vision information                         | xtospu       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [plot]="       Plot L1/L2/L8 metadata                                | xtosp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [frame-shift]="Calculate frame shift                                 | b            | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [sync]="       Synchronize Dolby Vision RPU files                    | bofnp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [fix]="        Fix or adjust Dolby Vision RPU(s)                     | xtojnFHS     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [generate]="   Generate Dolby Vision P8 RPU for HDR10 video(s)       | xtonpFGIP    | .mkv, .mp4, .m2ts, .ts, .hevc, .mov"
-  [inject]="     Sync & Inject Dolby Vision RPU                        | boeqflwnmpFH | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [remux]="      Remux video file(s)                                   | xtoemr       | .mkv, .mp4, .m2ts, .ts"
-  [extract]="    Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpP     | .mkv, .mp4, .m2ts, .ts, .hevc"
-  [cuts]="       Extract scene-cut frame list(s)                       | xtos         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [subs]="       Extract .srt subtitles                                | tocm         | .mkv"
-  [png]="        Extract video frame(s) as PNG image(s)                | xtok         | .mkv, .mp4, .m2ts, .ts"
-  [mp3]="        Extract audio track(s) as MP3 file(s)                 | xtos         | .mkv, .mp4, .m2ts, .ts"
-  [edl]="        Convert scene-cut list between .txt and .edl          | xtoI         | .txt, .edl"
+  [info]="    Show Dolby Vision information                         | xtospu       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [plot]="    Plot L1/L2/L8 metadata                                | xtosp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [shift]="   Calculate frame shift                                 | b            | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [sync]="    Synchronize Dolby Vision RPU files                    | bofnp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [fix]="     Fix or adjust Dolby Vision RPU(s)                     | xtojnFHS     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [generate]="Generate Dolby Vision P8 RPU for HDR10 video(s)       | xtonpFGIP    | .mkv, .mp4, .m2ts, .ts, .hevc, .mov"
+  [inject]="  Sync & Inject Dolby Vision RPU                        | boeqflwnmpFH | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [remux]="   Remux video file(s)                                   | xtoemr       | .mkv, .mp4, .m2ts, .ts"
+  [extract]=" Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpP     | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [cuts]="    Extract scene-cut frame list(s)                       | xtos         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [subs]="    Extract .srt subtitles                                | tocm         | .mkv"
+  [png]="     Extract video frame(s) as PNG image(s)                | xtok         | .mkv, .mp4, .m2ts, .ts"
+  [mp3]="     Extract audio track(s) as MP3 file(s)                 | xtos         | .mkv, .mp4, .m2ts, .ts"
+  [edl]="     Convert scene-cut list between .txt and .edl          | xtoI         | .txt, .edl"
 )
 declare -A cmd_description=(
-  [frame-shift]="Calculate frame shift of <input> relative to <base-input>"
+  [shift]="Calculate frame shift of <input> relative to <base-input>"
   [sync]="Synchronize RPU of <input> to align with RPU of <base-input>"
   [inject]="Sync & Inject RPU of <input> into <base-input>"
   [extract]="Extract DV RPU(s) or .hevc base layer(s), or convert to ProRes (.mov)"
@@ -1481,7 +1481,7 @@ frame_shift() {
 
   if [[ -z "$shift" ]]; then
     local error="The full run failed to find a valid frame shift too"
-    [ "$providable" = 1 ] && error+=" (provide a valid '$B--frame-shift$N' manually)"
+    [ "$providable" = 1 ] && error+=" (provide a valid '$B--shift$N' manually)"
     fatal_error "$error" 2
   fi
 
@@ -1991,7 +1991,7 @@ subs() {
     log ""
     mkvextract "$input" tracks "${tracks[@]}"
   else
-    log "No subtitles found in '$(basename "$input")' ($B--lang-codes/-c$N: ${SUBS_LANG_CODES:-'all'}), skipping..."
+    log "No subtitles found in '$(basename "$input")' ($B--lang/-c$N: ${SUBS_LANG_CODES:-'all'}), skipping..."
   fi
 }
 
@@ -2047,14 +2047,15 @@ help() {
   [ "$cmd" = 'generate' ] && default_l6='auto-detected'
 
   case "$cmd_options" in
-  *F*) help_left+=17 ;;
-  *e*) help_left+=15 ;;
-  *[lcmG]*) help_left+=14 ;;
+  *H*) help_left+=17 ;;
+  *G*) help_left+=16 ;;
+  *[eF]*) help_left+=15 ;;
+  *m*) help_left+=14 ;;
   *P*) help_left+=13 ;;
-  *f*) help_left+=12 ;;
   *[bxs]*) help_left+=11 ;;
-  *[tku]*) help_left+=10 ;;
-  *[op]*) help_left+=8 ;;
+  *[ltku]*) help_left+=10 ;;
+  *S*) help_left+=9 ;;
+  *[opc]*) help_left+=8 ;;
   *) help_left+=6 ;;
   esac
 
@@ -2084,18 +2085,18 @@ help() {
   help1 "-s, --sample [<SECONDS>]        Process only the first N seconds of input
                                          [default sample duration: $B${EXTRACT_SHORT_SEC}s$N]
                                          ${bin:+"[ignored for $B.bin$N inputs]"}"
-  help1 'P' "--prores-profile <0-5>      Controls ProRes encoding profile (${B}0$N = Proxy, ${B}5$N = 4444 XQ)
+  help1 'P' "--profile <0-5>             Controls ProRes encoding profile (${B}0$N = Proxy, ${B}5$N = 4444 XQ)
                                          [default: $B$PRORES_PROFILE$N (macOS: $B$PRORES_MACOS$N)]"
-  help1 "-q, --skip-sync                 Skip RPUs sync (assumes RPUs are already in sync)"
-  help1 "-f, --frame-shift <SHIFT>       Frame shift value [default: ${B}auto-calculated$N]
-                                         ${q:+"[ignored when $B--skip-sync$N]"}"
-  help1 "-l, --rpu-levels <L1[,...]>     RPU levels to inject [default: $B$RPU_LEVELS$N]
+  help1 "-q, --synced                    Skip RPUs sync (assumes RPUs are already in sync)"
+  help1 "-f, --shift <SHIFT>             Frame shift value [default: ${B}auto-calculated$N]
+                                         ${q:+"[ignored when $B--synced$N]"}"
+  help1 "-l, --levels <L1[,...]>         RPU levels to inject [default: $B$RPU_LEVELS$N]
                                          [allowed values: ${B}1-6, 8-11, 254, 255$N]
                                          [ignored when $B--raw-rpu$N]"
   help1 "-w, --raw-rpu                   Inject input RPU instead of transferring levels"
-  help1 'G' "--scene-cuts <FILE>         Scene-cuts file path [default: ${B}extracted from input$N]
+  help1 'G' "--cuts <FILE>               Scene-cuts file path [default: ${B}extracted from input$N]
                                          [supported formats: $B.txt, .edl$N]"
-  help1 'G' "--analysis-tuning <0-5>     Controls L1 analysis tuning [default: ${B}$L1_TUNING$N]
+  help1 'G' "--tuning <0-5>              Controls L1 analysis tuning [default: ${B}$L1_TUNING$N]
                                          Allowed values:
                                          $B- 0 / legacy$N   – Legacy CM4
                                          $B- 1 / most$N     – Most Highlight Detail (Darkest)
@@ -2113,12 +2114,18 @@ help() {
                                          $B- 21 / BT_1000$N – 1000-nit BT.2020
                                          $B- 30 / P3_2000$N – 2000-nit P3
                                          $B- 31 / BT_2000$N – 2000-nit BT.2020"
-  help1 'G' "--variable-l5 <FILE>        JSON L5 metadata config file path
-                                         Use $B--variable-l5-example$N for sample"
-  help1 'G' "--variable-l5-example       Show example JSON for $B--variable-l5$N option"
   help1 'F' "--l5 <T,B[,L,R]>            ${G:+"Set "}Dolby Vision L5 active area offsets
                                          [defaults: $B${default_l5:-"L=0, R=0"}$N]
                                          <Top, Bottom, Left, Right>"
+  help1 'G' "--l5-analysis <T,B[,L,R]>   L5 active area offsets (for analysis only)
+                                         [defaults: ${B}same as --l5$N]
+                                         <Top, Bottom, Left, Right>"
+  help1 'G' "--l5v <FILE>                Variable L5 metadata JSON config
+                                         Use $B--l5v-example$N for sample"
+  help1 'G' "--l5v-analysis <FILE>       Variable L5 metadata JSON config (for analysis only)
+                                         [defaults: ${B}same as --l5v$N]
+                                         Use $B--l5v-example$N for sample"
+  help1 'G' "--l5v-example               Show example JSON for $B--l5v/--l5v-analysis$N"
   help1 'F' "--l6 <MAX_CLL,MAX_FALL>     ${G:+"Set "}Dolby Vision L6 MaxCLL/MaxFALL
                                          ${default_l6:+"[default: $B$default_l6$N]"}"
   help1 'S' "--l6-source <FILE>          File path to use for L6 MaxCLL/FALL detection
@@ -2128,8 +2135,8 @@ help() {
   help1 'F' "--cuts-first <0|1>          Force first frame as scene-cut [default: $B$FIX_CUTS_FIRST$N]"
   help1 'F' "--cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: $B$FIX_CUTS_CONSEC$N]"
   help1 "-j, --json <FILE>               JSON config file path (applied before auto-fixes)
-                                         Use $B--json-examples$N for samples"
-  help1 'j' "--json-examples             Show examples for $B--json$N option"
+                                         Use $B--json-example$N for samples"
+  help1 'j' "--json-example              Show examples for $B--json$N option"
   help1 "-n, --info <0|1>                Controls intermediate info commands [default: $B$INFO_INTERMEDIATE$N]"
   help1 "-p, --plot <P1[,...]>           Controls L1/L2/L8${i:+" intermediate"} plotting
                                          [default: $B$PLOT_DEFAULT$N${s:+" (${B}none$N if $B--sample$N$default_plot_info)"}]
@@ -2143,7 +2150,7 @@ help() {
                                          $B- L8H[_NITS]$N – L8 Hue Vectors
                                          ${B}NITS$N = 100 (default), 600, 1000 or MAX (highest available)
                                          L8 plots require CM v4.0 RPU"
-  help1 "-c, --lang-codes <C1[,...]>     ISO 639-2 lang codes of subtitle tracks to extract
+  help1 "-c, --lang <C1[,...]>           ISO 639-2 lang codes of subtitle tracks to extract
                                          [default: $B${SUBS_LANG_CODES:-all}$N; example value: 'eng,pol']"
   clean="-m, --clean-filenames <0|1>     Controls output filename cleanup [default: $B$CLEAN_FILENAMES$N]
                                          [ignored if $B--output$N is set]
@@ -2160,14 +2167,14 @@ help() {
   echo1 "${BU}Options for .mkv / .mp4 output:$N"
   help0 "    --subs <FILE>               $B.srt$N subtitle file path to include
                                          $multiple_inputs"
-  help1 "    --find-subs <0|1>           Controls subtitles auto-detection [default: $B$SUBS_AUTODETECTION$N]
+  help1 "    --subs-find <0|1>           Controls subtitles auto-detection [default: $B$SUBS_AUTODETECTION$N]
                                          If ${B}1$N, searches for matching subs within input's dir"
-  help1 "    --copy-subs <0|1|LNG>       Controls input subtitle tracks to copy [default: $B$SUBS_COPY_MODE$N]
+  help1 "    --subs-copy <0|1|LNG>       Controls input subtitle tracks to copy [default: $B$SUBS_COPY_MODE$N]
                                          Allowed values:
                                          $B- 0:$N     none
                                          $B- 1:$N     all
                                          $B- <lng>:$N based on ISO 639-2 lang code [e.g., eng]"
-  help1 "    --copy-audio <1|2|3>        Controls input audio tracks to copy [default: $B$AUDIO_COPY_MODE$N]
+  help1 "    --audio-copy <1|2|3>        Controls input audio tracks to copy [default: $B$AUDIO_COPY_MODE$N]
                                          Allowed values:
                                          $B- 1:$N 1st track only
                                          $B- 2:$N 1st track + compatibility if 1st is TrueHD
@@ -2176,11 +2183,11 @@ help() {
                                          $multiple_inputs"
   help1 "    --title <TITLE>             Metadata title (e.g., movie name)
                                          $multiple_inputs"
-  help1 "    --auto-title <0|1>          Controls generation of metadata title
+  help1 "    --title-auto <0|1>          Controls generation of metadata title
                                          If ${B}1$N, metadata title will match clean filename
                                          [default - shows: $B$TITLE_SHOWS_AUTO$N, movies: $B$TITLE_MOVIES_AUTO$N]
                                          [ignored if $B--title$N is set]"
-  help1 "    --auto-tracks <0|1>         Controls generation of some track names [default: $B$TRACK_NAMES_AUTO$N]
+  help1 "    --tracks-auto <0|1>         Controls generation of some track names [default: $B$TRACK_NAMES_AUTO$N]
                                          [e.g., audio: TrueHD Atmos 7.1, subs: Polish]"
   help1 "$clean"
 }
@@ -2202,7 +2209,7 @@ show_help() {
   echo "CLI tool for processing DV videos, with a focus on CMv4.0 + P7 CMv2.9 hybrid creation"
   echo1 "${BU}Usage:$N $REMUXER [OPTIONS] <COMMAND>"
   echo1 "${BU}Commands:$N"
-  for cmd in info plot frame-shift sync fix generate inject remux extract cuts subs png mp3 edl; do
+  for cmd in info plot shift sync fix generate inject remux extract cuts subs png mp3 edl; do
     help0 "$cmd            $(cmd_info "$cmd")"
   done
   echo1 "${BU}Options:$N"
@@ -2392,7 +2399,7 @@ parse_args() {
     case "$1" in
     -h | --help) show_help "$cmd" "$1"; return ;;
     -v | --version) version; return ;;
-    -q | --skip-sync) skip_sync=1; shift; continue ;;
+    -q | --synced) skip_sync=1; shift; continue ;;
     -w | --raw-rpu) rpu_raw=1; shift; continue ;;
     -s | --sample)
       sample=1
@@ -2401,41 +2408,41 @@ parse_args() {
       fi
       sample_duration=$(parse_option "$2" "$sample_duration" "$cmd" "$1" 's' '<seconds>' '[1-9][0-9]*')
       ;;
-    --json-examples) json_examples=1 && output=''; shift; continue ;;
-    --variable-l5-example) l5_examples=1 && output=''; shift; continue ;;
+    --json-example) json_examples=1 && output=''; shift; continue ;;
+    --l5v-example) l5_examples=1 && output=''; shift; continue ;;
     -x | --formats)                 formats=$(parse_option "$2" "$formats" "$cmd" "$1" 'x' "${allowed_formats//./}" '' 1) ;;
     -t | --input-type)           input_type=$(parse_option "$2" "$input_type" "$cmd" "$1" 't' 'shows, movies') ;;
     -o | --output)                   output=$(parse_file "$2" "$output" "$cmd" "$1" 'o' '' 0) ;;
     -e | --output-format)     output_format=$(parse_option "$2" "$output_format" "$cmd" "$1" 'e' "$(cmd_output_formats "$cmd")") ;;
-    -f | --frame-shift)         frame_shift=$(parse_option "$2" "$frame_shift" "$cmd" "$1" 'f' '<number>' '-?[0-9]+') ;;
+    -f | --shift)               frame_shift=$(parse_option "$2" "$frame_shift" "$cmd" "$1" 'f' '<number>' '-?[0-9]+') ;;
     -u | --frames)                   frames=$(parse_option "$2" "$frames" "$cmd" "$1" 'u' '<frame-number>' '(0|[1-9][0-9]*)' 1) ;;
     -k | --time)                 timestamps=$(parse_option "$2" "$timestamps" "$cmd" "$1" 'k' '[[HH:]MM:]SS' '((([0-5]?[0-9]:){1,2}[0-5]?[0-9])|[0-9]+)' 1) ;;
-    -l | --rpu-levels)           rpu_levels=$(parse_option "$2" "$rpu_levels" "$cmd" "$1" 'l' '1-6, 8-11, 254, 255' '([1-689]|1[01]|25[45])' 1) ;;
+    -l | --levels)               rpu_levels=$(parse_option "$2" "$rpu_levels" "$cmd" "$1" 'l' '1-6, 8-11, 254, 255' '([1-689]|1[01]|25[45])' 1) ;;
     -n | --info)                       info=$(parse_option "$2" "$info" "$cmd" "$1" 'n' '0, 1') ;;
     -p | --plot)                       plot=$(parse_option "$2" "$plot" "$cmd" "$1" 'p' '<none, all, L1, L2[_NITS}, L8T[_NITS}, L8H[_NITS}, L8S[_NITS}>' '(0|1|none|all|l1|(l(2|8t|8s|8h)(_(100|600|1000|max))?))' 1) ;;
-    -c | --lang-codes)           lang_codes=$(parse_option "$2" "$lang_codes" "$cmd" "$1" 'c' '<ISO 639-2 lang codes>' '[a-z]{3}' 1) ;;
+    -c | --lang)                 lang_codes=$(parse_option "$2" "$lang_codes" "$cmd" "$1" 'c' '<ISO 639-2 lang codes>' '[a-z]{3}' 1) ;;
     -m | --clean-filenames) clean_filenames=$(parse_option "$2" "$clean_filenames" "$cmd" "$1" 'm' '0, 1') ;;
     -r | --hevc)                       hevc=$(parse_file "$2" "$hevc" "$cmd" "$1" 'r' '.hevc') ;;
     -j | --json)                       json=$(parse_file "$2" "$json" "$cmd" "$1" 'F' '.json') ;;
-    --scene-cuts)                scene_cuts=$(parse_file "$2" "$scene_cuts" "$cmd" "$1" 'G' '.txt .edl') ;;
-    --variable-l5)              variable_l5=$(parse_file "$2" "$variable_l5" "$cmd" "$1" 'G' '.json') ;;
+    --cuts)                      scene_cuts=$(parse_file "$2" "$scene_cuts" "$cmd" "$1" 'G' '.txt .edl') ;;
+    --l5v)                      variable_l5=$(parse_file "$2" "$variable_l5" "$cmd" "$1" 'G' '.json') ;;
     --l6-source)                  l6_source=$(parse_file "$2" "$l6_source" "$cmd" "$1" 'S' '.mkv .mp4 .m2ts .ts .hevc .bin') ;;
-    --analysis-tuning)               tuning=$(parse_option "$2" "$tuning" "$cmd" "$1" 'G' '0, legacy, 1, most, 2, more, 3, balanced, 4, less, 5, least') ;;
+    --tuning)                        tuning=$(parse_option "$2" "$tuning" "$cmd" "$1" 'G' '0, legacy, 1, most, 2, more, 3, balanced, 4, less, 5, least') ;;
     --mdl)                              mdl=$(parse_option "$2" "$mdl" "$cmd" "$1" 'G' '7, P3_4000, 8, BT_4000, 20, P3_1000, 21, BT_1000, 30, P3_2000, 31, BT_2000', '([78]|[23][01]|(bt|p3)_[124]000)') ;;
     --fps)                              fps=$(parse_option "$2" "$fps" "$cmd" "$1" 'I' '<frame-rate>' '[0-9]{1,5}([./][0-9]{1,5})?') ;;
-    --prores-profile)        prores_profile=$(parse_option "$2" "$prores_profile" "$cmd" "$1" 'P' '0, 1, 2, 3, 4, 5') ;;
+    --profile)               prores_profile=$(parse_option "$2" "$prores_profile" "$cmd" "$1" 'P' '0, 1, 2, 3, 4, 5') ;;
     --l5)                                l5=$(parse_option "$2" "$l5" "$cmd" "$1" 'F' '<offset>' '[0-9]+' 1 '2|4') ;;
     --l6)                                l6=$(parse_option "$2" "$l6" "$cmd" "$1" 'F' '<nits-number>' '[0-9]+' 1) ;;
     --cuts-clear)                cuts_clear=$(parse_option "$2" "$cuts_clear" "$cmd" "$1" 'H' '<frame-range>' '[0-9]+(-[0-9]+)?' 1) ;;
     --cuts-first)                cuts_first=$(parse_option "$2" "$cuts_first" "$cmd" "$1" 'F' '0, 1') ;;
     --cuts-consecutive)    cuts_consecutive=$(parse_option "$2" "$cuts_consecutive" "$cmd" "$1" 'F' '0, 1') ;;
     --subs)                            subs=$(parse_file "$2" "$subs" "$cmd" "$1" 'e' '.srt') ;;
-    --find-subs)                  find_subs=$(parse_option "$2" "$find_subs" "$cmd" "$1" 'e' '0, 1') ;;
-    --copy-subs)                  copy_subs=$(parse_option "$2" "$copy_subs" "$cmd" "$1" 'e' '0, 1, <ISO 639-2 lang code>' '(0|1|[a-z]{3})') ;;
-    --copy-audio)                copy_audio=$(parse_option "$2" "$copy_audio" "$cmd" "$1" 'e' '1, 2, 3') ;;
+    --subs-find)                  find_subs=$(parse_option "$2" "$find_subs" "$cmd" "$1" 'e' '0, 1') ;;
+    --subs-copy)                  copy_subs=$(parse_option "$2" "$copy_subs" "$cmd" "$1" 'e' '0, 1, <ISO 639-2 lang code>' '(0|1|[a-z]{3})') ;;
+    --audio-copy)                copy_audio=$(parse_option "$2" "$copy_audio" "$cmd" "$1" 'e' '1, 2, 3') ;;
     --title)                          title=$(parse_base "$2" "$title" "$cmd" "$1" 'e') ;;
-    --auto-title)                title_auto=$(parse_option "$2" "$title_auto" "$cmd" "$1" 'e' '0, 1') ;;
-    --auto-tracks)              tracks_auto=$(parse_option "$2" "$tracks_auto" "$cmd" "$1" 'e' '0, 1') ;;
+    --title-auto)                title_auto=$(parse_option "$2" "$title_auto" "$cmd" "$1" 'e' '0, 1') ;;
+    --tracks-auto)              tracks_auto=$(parse_option "$2" "$tracks_auto" "$cmd" "$1" 'e' '0, 1') ;;
     --out-dir)                      out_dir=$(parse_dir "$2" "$out_dir" "$cmd" "$1") ;;
     --tmp-dir)                      tmp_dir=$(parse_dir "$2" "$tmp_dir" "$cmd" "$1") ;;
     -b | --base-input)           base_input=$(parse_file "$2" "$base_input" "$cmd" "$1" 'b' "$allowed_formats") ;;
@@ -2462,10 +2469,10 @@ parse_args() {
   else
     batch=0
     [[ "$cmd_options" == *b* && "$base_input" == "${inputs[0]}" ]] && log_kill "${B}Input$N and '$B--base-input/-b$N' must be different files" 2 1
-    [ "$skip_sync" = 1 ] && frame_shift=$(option_ignored "$frame_shift" '--frame-shift/-f' "has no effect when $B--skip-sync$N")
+    [ "$skip_sync" = 1 ] && frame_shift=$(option_ignored "$frame_shift" '--shift/-f' "has no effect when $B--synced$N")
     [[ -n "$output" && "$clean_filenames" = 1 ]] && clean_filenames=$(option_ignored "$clean_filenames" '--clean-filenames/-m' "has no effect when $B--output$N is set")
-    [[ -n "$title" ]] && title_auto=$(option_ignored "$title_auto" '--auto-title' "has no effect when $B--title$N is set")
-    [[ "$rpu_raw" = 1 ]] && rpu_levels=$(option_ignored "$rpu_levels" '--rpu-levels/-l' "has no effect when $B--rpu_raw$N is set")
+    [[ -n "$title" ]] && title_auto=$(option_ignored "$title_auto" '--title-auto' "has no effect when $B--title$N is set")
+    [[ "$rpu_raw" = 1 ]] && rpu_levels=$(option_ignored "$rpu_levels" '--levels/-l' "has no effect when $B--rpu_raw$N is set")
   fi
 
   [[ -n "$variable_l5" && -n "$l5" && -s "$variable_l5" ]] && l5=$(option_ignored "$l5" '--l5' "has no effect when $B--variable_l5$N is set")
@@ -2519,7 +2526,7 @@ parse_args() {
     case "$cmd" in
     info) info "$input" "$sample" 0 "$frames" "$output" "$batch" "$explicit_plot" ;;
     plot) plot "$input" "$sample" "$explicit_plot" "" "$output" 1 ;;
-    frame-shift) frame_shift "$input" "$base_input" >/dev/null ;;
+    shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
     fix) fix_rpu "$input" 0 "$cuts_clear" "$l5" "$l6" "" "$l6_source" "$json" "$output" >/dev/null ;;
     generate) generate "$input" "$scene_cuts" "$mdl" "$fps" "$l5" "$variable_l5" "$l6" "$output" >/dev/null ;;
