@@ -324,7 +324,7 @@ to_prores() {
       logf "%s '%s' is not HDR10, default color primaries (yuv420p10le/bt2020nc/bt2020/smpte2084) may be wrong - check input" "$(yellow 'Warning:')" "$input_name"
     fi
 
-    log_command 'ffmpeg -i %s -map 0:v:0 -map_chapters -1 %s -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an %s' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
+    log_command 'ffmpeg -i "%s" -map 0:v:0 -map_chapters -1 %s -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an "%s"' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
     if ! ffmpeg -i "$input" -map 0:v:0 -map_chapters -1 "${ffmpeg_cmd[@]}" -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an "$output" >&2; then
       log_kill "$(red 'Error:') Failed to encode '$input' to $type"
     fi
@@ -361,13 +361,13 @@ to_hevc() {
 
   if [[ ! -f "$output" ]]; then
     if [ "$bl_only" != 1 ]; then
-      log_command 'ffmpeg -i %s -map 0:v:0 -c copy %s -f hevc %s' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
+      log_command 'ffmpeg -i "%s" -map 0:v:0 -c copy %s -f hevc "%s"' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
       ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc "$output" >&2
     elif check_extension "$input" ".hevc"; then
-      log_command 'dovi_tool demux -b %s %s' "$(basename "$output")" "$input_name"
+      log_command 'dovi_tool demux -b "%s" "%s"' "$(basename "$output")" "$input_name"
       dovi_tool demux -b "$output" -e "$(tmp_file "$input" 'hevc' "EL")" "$input" >&2
     else
-      log_command 'ffmpeg -i %s -map 0:v:0 -c copy %s -f hevc - | dovi_tool demux -b %s -' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
+      log_command 'ffmpeg -i "%s" -map 0:v:0 -c copy %s -f hevc - | dovi_tool demux -b "%s" -' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
       ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc - | dovi_tool demux -b "$output" -e "$(tmp_file "$input" 'hevc' "EL")" - >&2
     fi
     log_t "%s for: '%s' extracted - output file: '%s'" "$type" "$input_name" "$output"
@@ -1400,7 +1400,7 @@ generate() {
     else
       IFS=',' read -r l5_top l5_bottom l5_left l5_right <<<"$l5_a"
 
-      log_command 'cm_analyze -s %s -m %s -r %s --source-format "pq bt2020" --letterbox %s %s %s %s --analysis-tuning %s <prores> <output>' \
+      log_command 'cm_analyze -s "%s" -m %s -r %s --source-format "pq bt2020" --letterbox %s %s %s %s --analysis-tuning %s <prores> <output>' \
         "$(basename "$scene_cuts")" "$mdl" "$fps" "${l5_left:-0}" "${l5_right:-0}" "${l5_top:-0}" "${l5_bottom:-0}" "$L1_TUNING"
 
       if ! cm_analyze -s "$scene_cuts" -m "$mdl" -r "$fps" --source-format "pq bt2020" --letterbox "${l5_left:-0}" "${l5_right:-0}" "${l5_top:-0}" "${l5_bottom:-0}" --analysis-tuning "$L1_TUNING" "$prores" "$xml"; then
