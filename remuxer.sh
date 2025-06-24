@@ -766,7 +766,7 @@ info() {
 }
 
 png() {
-  local input="$1" timestamps="$2" output="$3" base_output timestamped_output timestamp duration
+  local input="$1" timestamps="$2" output="$3" ffmpeg_cmd=() base_output timestamped_output timestamp duration
 
   log_t "Extracting frame(s) as PNG for: '%s' ..." "$(basename "$input")"
 
@@ -785,12 +785,20 @@ png() {
   [[ -z "$output" || "$timestamps" == *,* ]] && timestamped_output=1
   output=$(out_file "$input" "png" 'FRAME' "$output") && base_output="${output%.*}"
 
+  if ffmpeg -loglevel info -i "$input" 2>&1 | grep -q 'Video:.*smpte2084'; then
+    if ffmpeg -filters | grep -q zscale; then
+      ffmpeg_cmd+=(-vf "zscale=t=linear,tonemap=hable")
+    else
+      logf "%s HDR10 input '%s' detected, but ffmpeg lacks zscale support. Colors may appear incorrect." "$(yellow 'Warning:')" "$(basename "$input")"
+    fi
+  fi
+
   for timestamp in ${timestamps//,/ }; do
     [ "$timestamped_output" = 1 ] && output="${base_output}_${timestamp//:/}.png"
     log_t "Extracting frame at approx. %s%s to '%s'. .." "$timestamp" "${duration:+s}" "$(basename "$output")"
     [[ -e "$output" ]] && logf "Output file '%s' already exists, skipping..." "$output" && continue
 
-    ffmpeg -ss "$timestamp" -i "$input" -frames:v 1 "$output"
+    ffmpeg -ss "$timestamp" -i "$input" -map_metadata -1 -map_chapters -1 -vframes 1 "${ffmpeg_cmd[@]}" -update 1 "$output"
   done
 
   log_t "Frame(s) successfully extracted"
@@ -2437,7 +2445,7 @@ parse_args() {
     -e | --output-format)     output_format=$(parse_option "$2" "$output_format" "$cmd" "$1" 'e' "$(cmd_output_formats "$cmd")") ;;
     -f | --shift)               frame_shift=$(parse_option "$2" "$frame_shift" "$cmd" "$1" 'f' '<number>' '-?[0-9]+') ;;
     -u | --frames)                   frames=$(parse_option "$2" "$frames" "$cmd" "$1" 'u' '<frame-number>' '(0|[1-9][0-9]*)' 1) ;;
-    -k | --time)                 timestamps=$(parse_option "$2" "$timestamps" "$cmd" "$1" 'k' '[[HH:]MM:]SS' '((([0-5]?[0-9]:){1,2}[0-5]?[0-9])|[0-9]+)' 1) ;;
+    -k | --time)                 timestamps=$(parse_option "$2" "$timestamps" "$cmd" "$1" 'k' '[[HH:]MM:]SS[.MMM]' '(((([0-5]?[0-9]:){1,2}[0-5]?[0-9])|[0-9]+)(\.[0-9]{1,3})?)' 1) ;;
     -l | --levels)               rpu_levels=$(parse_option "$2" "$rpu_levels" "$cmd" "$1" 'l' '1-6, 8-11, 254, 255' '([1-689]|1[01]|25[45])' 1) ;;
     -n | --info)                       info=$(parse_option "$2" "$info" "$cmd" "$1" 'n' '0, 1') ;;
     -p | --plot)                       plot=$(parse_option "$2" "$plot" "$cmd" "$1" 'p' '<none, all, L1, L2[_NITS}, L8T[_NITS}, L8H[_NITS}, L8S[_NITS}>' '(0|1|none|all|l1|(l(2|8t|8s|8h)(_(100|600|1000|max))?))' 1) ;;
