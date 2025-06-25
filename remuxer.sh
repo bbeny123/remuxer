@@ -2373,7 +2373,7 @@ parse_inputs() {
   while [[ $# -gt 0 ]]; do
     if [ -d "$1" ]; then
       [ ${#find_filter[@]} -eq 0 ] && mapfile -t find_filter < <(find_filter "$formats")
-      find "$1" -maxdepth 1 -type f \( "${find_filter[@]}" \) -print0 | while read -rd $'\0' input; do
+      find "$1" -maxdepth 1 -type f \( ! -name '.*' -a \( "${find_filter[@]}" \) \) -print0 | while read -rd $'\0' input; do
         typed_input "$input" "$1" "$type"
       done
     else
