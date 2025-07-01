@@ -1008,20 +1008,20 @@ detect_l6() {
 }
 
 forced_l6() {
-  local input="$1" l6="$2" l6_source="$3" l6_source2="$4" mdl_min="$5" mdl_max="$6" max_cll max_fall
-  IFS=',' read -r max_cll max_fall <<<"$l6"
+  local input="$1" l6="$2" l6_source="$3" l6_source2="$4" mdl_min="$5" mdl_max="$6" max_cll max_fall t
+  IFS=',' read -r max_cll max_fall t <<<"$l6"
 
   if ((mdl_min == 0 && mdl_max == 0)); then
-    IFS=',' read -r mdl_min mdl_max < <(video_l6 "$input")
+    IFS=',' read -r mdl_min mdl_max t < <(video_l6 "$input")
 
     if ((mdl_min == 0 && mdl_max == 0)) && [ -n "$l6_source" ]; then
-      IFS=',' read -r mdl_min mdl_max < <(rpu_l6 "$l6_source")
-      ((mdl_min == 0 && mdl_max == 0)) && IFS=',' read -r mdl_min mdl_max < <(video_l6 "$l6_source")
+      IFS=',' read -r mdl_min mdl_max t < <(rpu_l6 "$l6_source")
+      ((mdl_min == 0 && mdl_max == 0)) && IFS=',' read -r mdl_min mdl_max t < <(video_l6 "$l6_source")
     fi
 
     if ((mdl_min == 0 && mdl_max == 0)) && [ -n "$l6_source2" ]; then
-      IFS=',' read -r mdl_min mdl_max < <(rpu_l6 "$l6_source2")
-      ((mdl_min == 0 && mdl_max == 0)) && IFS=',' read -r mdl_min mdl_max < <(video_l6 "$l6_source2")
+      IFS=',' read -r mdl_min mdl_max t < <(rpu_l6 "$l6_source2")
+      ((mdl_min == 0 && mdl_max == 0)) && IFS=',' read -r mdl_min mdl_max t < <(video_l6 "$l6_source2")
     fi
   fi
 
