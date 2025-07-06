@@ -34,8 +34,8 @@ All required external tools must be downloaded and placed in the directory speci
 - [`dovi_tool`](https://github.com/quietvoid/dovi_tool/releases) (v2.3.0)
 - [`cm_analyze`](https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools) (v5.6.1) — optional (used by `generate` command)
 - `topsubs` command only:
-  - [`Java JRE/JDK`](https://adoptium.net/temurin/releases?version=21&mode=filter&os=any&arch=any) (v21.0.7)
-  - [`BDSup2Sub`](https://github.com/mjuhasz/BDSup2Sub) (v5.1.2 [`.jar`](https://raw.githubusercontent.com/wiki/mjuhasz/BDSup2Sub/downloads/BDSup2Sub.jar))
+    - [`Java JRE/JDK`](https://adoptium.net/temurin/releases?version=21&mode=filter&os=any&arch=any) (v21.0.7)
+    - [`BDSup2Sub`](https://github.com/mjuhasz/BDSup2Sub) (v5.1.2 [`.jar`](https://raw.githubusercontent.com/wiki/mjuhasz/BDSup2Sub/downloads/BDSup2Sub.jar))
 
 > The versions listed above are those with which `remuxer` was tested.  
 > Other versions may work, but compatibility is not guaranteed.
