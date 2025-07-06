@@ -10,32 +10,36 @@ readonly START_TIME=$(date +%s%1N)
 readonly DEBUG_LOG='0'
 readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/tools"
 
-alias jq="'$TOOLS_DIR/jq-win64.exe'"                                       # v1.7.1: https://jqlang.org/download/
-alias mediainfo="'$TOOLS_DIR/MediaInfo.exe'"                               # v25.04: https://mediaarea.net/pl/MediaInfo/Download
-alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel error" # v7.1.1: https://ffmpeg.org/download.html
-alias mkvmerge="'$TOOLS_DIR/mkvtoolnix/mkvmerge.exe'"                      # v92.0:  https://mkvtoolnix.download/downloads.html
+alias jq="'$TOOLS_DIR/jq-win64.exe'"                                       # v1.7.1:  https://jqlang.org/download/
+alias mediainfo="'$TOOLS_DIR/MediaInfo.exe'"                               # v25.04:  https://mediaarea.net/pl/MediaInfo/Download
+alias ffmpeg="'$TOOLS_DIR/ffmpeg.exe' -hide_banner -stats -loglevel error" # v7.1.1:  https://ffmpeg.org/download.html
+alias mkvmerge="'$TOOLS_DIR/mkvtoolnix/mkvmerge.exe'"                      # v92.0:   https://mkvtoolnix.download/downloads.html
 alias mkvextract="'$TOOLS_DIR/mkvtoolnix/mkvextract.exe'"                  #
-alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                               # v2.3.0: https://github.com/quietvoid/dovi_tool/releases
-alias cm_analyze="'$TOOLS_DIR/cm_analyze.exe'"                             # v5.6.1: https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools
+alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                               # v2.3.0:  https://github.com/quietvoid/dovi_tool/releases
+alias cm_analyze="'$TOOLS_DIR/cm_analyze.exe'"                             # v5.6.1:  https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools
+alias java="java"                                                          # v21.0.7: https://adoptium.net/temurin/releases?version=21&mode=filter&os=any&arch=any
+alias sup2sub="java -jar '$TOOLS_DIR/BDSup2Sub.jar'"                       # v5.1.2:  https://raw.githubusercontent.com/wiki/mjuhasz/BDSup2Sub/downloads/BDSup2Sub.jar
 
 OUT_DIR="$(pwd)"
 PLOTS_DIR=""                     # <empty> - same as OUT_DIR
 TMP_DIR="$(pwd)/temp$START_TIME" # caution: This dir will be removed only if it is created by the script
 RPU_LEVELS="3,8,9,11,254"
-INFO_INTERMEDIATE='1'           # 0 - disabled,       1 - enabled
-PLOT_DEFAULT='L1,L2,L2_MAX,L8T' # all,none,L1,L2,L2_600,L2_1000,L2_MAX,L8T,L8T_600,L8T_1000,L8T_MAX,L8S,L8S_600,L8S_1000,L8S_MAX,L8S,L8S_600,L8S_1000,L8S_MAX
-FIX_CUTS_FIRST='1'              # 0 - disabled,       1 - enabled
-FIX_CUTS_CONSEC='1'             # 0 - disabled,       1 - enabled
-CLEAN_FILENAMES='1'             # 0 - disabled,       1 - enabled
-SUBS_AUTODETECTION='1'          # 0 - disabled,       1 - enabled
-TITLE_SHOWS_AUTO='0'            # 0 - disabled,       1 - enabled
-TITLE_MOVIES_AUTO='1'           # 0 - disabled,       1 - enabled
-TRACK_NAMES_AUTO='1'            # 0 - disabled,       1 - enabled [e.g., audio: DTS 5.1, subs: Polish]
-AUDIO_COPY_MODE='3'             # 1 - 1st track only, 2 - 1st + compatibility, 3 - all
-SUBS_COPY_MODE='1'              # 0 - none,           1 - all,                 <lng> - based on ISO 639-2 lang code [e.g., eng]
-SUBS_LANG_CODES='pol'           # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
-L1_TUNING='balanced'            # 0 - legacy,         1 - most,   2 - more,    3 - balanced,    4 - less,     5 - least
-FFMPEG_STRICT=1                 # 0 - disabled,       1 - enabled
+INFO_INTERMEDIATE='1'            # 0 - disabled,       1 - enabled
+PLOT_DEFAULT='L1,L2,L2_MAX,L8T'  # all,none,L1,L2,L2_600,L2_1000,L2_MAX,L8T,L8T_600,L8T_1000,L8T_MAX,L8S,L8S_600,L8S_1000,L8S_MAX,L8S,L8S_600,L8S_1000,L8S_MAX
+FIX_CUTS_FIRST='1'               # 0 - disabled,       1 - enabled
+FIX_CUTS_CONSEC='1'              # 0 - disabled,       1 - enabled
+CLEAN_FILENAMES='1'              # 0 - disabled,       1 - enabled
+SUBS_AUTODETECTION='1'           # 0 - disabled,       1 - enabled
+TITLE_SHOWS_AUTO='0'             # 0 - disabled,       1 - enabled
+TITLE_MOVIES_AUTO='1'            # 0 - disabled,       1 - enabled
+TRACK_NAMES_AUTO='1'             # 0 - disabled,       1 - enabled [e.g., audio: DTS 5.1, subs: Polish]
+AUDIO_COPY_MODE='3'              # 1 - 1st track only, 2 - 1st + compatibility, 3 - all
+SUBS_COPY_MODE='1'               # 0 - none,           1 - all,                 <lng> - based on ISO 639-2 lang code [e.g., eng]
+SUBS_LANG_CODES='all'            # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
+TOPSUBS_LANG_CODES='all'         # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
+TOPSUBS_MAX_OFFSET='600'
+L1_TUNING='balanced'             # 0 - legacy,         1 - most,   2 - more,    3 - balanced,    4 - less,     5 - least
+FFMPEG_STRICT=1                  # 0 - disabled,       1 - enabled
 PRORES_PROFILE='3'
 PRORES_MACOS='2'
 EXTRACT_SHORT_SEC='23'
@@ -52,6 +56,7 @@ declare -A commands=(
   [extract]=" Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpP     | .mkv, .mp4, .m2ts, .ts, .hevc"
   [cuts]="    Extract scene-cut frame list(s)                       | xtos         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [subs]="    Extract .srt subtitles                                | tocm         | .mkv"
+  [topsubs]=" Extract top-positioned PGS subtitles                  | xtscIY       | .mkv, .mp4, .m2ts, .ts, .sup, .pgs"
   [png]="     Extract video frame(s) as PNG image(s)                | xtok         | .mkv, .mp4, .m2ts, .ts"
   [mp3]="     Extract audio track(s) as MP3 file(s)                 | xtos         | .mkv, .mp4, .m2ts, .ts"
   [edl]="     Convert scene-cut list between .txt and .edl          | xtoI         | .txt, .edl"
@@ -1256,7 +1261,7 @@ mdl_fps() {
   if [ -z "$fps" ]; then
     [[ -z "$info_fps" || "$info_fps" = "/" ]] && info_fps="$info_fps_org"
 
-    fps="${info_fps%"/1"}" && fps="${info_fps%"/"}"
+    fps="${info_fps%"/1"}" && fps="${fps%"/"}"
 
     if [ -n "$fps" ]; then
       logf "Detected input FPS: %s" "$fps"
@@ -2024,6 +2029,147 @@ subs() {
   fi
 }
 
+extract_pgs() {
+  local input="$1" sample="$2" out_dir="${3%/}" ffmpeg_input=() ffmpeg_args=() lang_filter track id lang output
+
+  check_extension "$input" '.mkv .mp4 .m2ts .ts' 1
+
+  log_c "Extracting PGS subtitles"
+
+  TOPSUBS_LANG_CODES="${TOPSUBS_LANG_CODES,,}"
+  [[ -n "$TOPSUBS_LANG_CODES" && "$TOPSUBS_LANG_CODES" != 'all' ]] && lang_filter="\((${TOPSUBS_LANG_CODES//,/|})\)"
+
+  while IFS= read -r track; do
+    [[ ! "$track" =~ Stream\ \#[0-9]+:([0-9]+)\(([a-zA-Z]+)\) ]] && continue
+    id="${BASH_REMATCH[1]}" && lang="${BASH_REMATCH[2]}"
+
+    output="$out_dir/$id"
+    [[ "${track,,}" == *'(comment)'* ]] && output+="-COMMENT"
+    [[ "${track,,}" == *'(descriptions)'* ]] && output+="-DESC"
+    [[ "${track,,}" == *'(visual impaired)'* ]] && output+="-VI"
+    [[ "${track,,}" == *'(hearing impaired)'* ]] && output+="-SDH"
+    [[ "${track,,}" == *'(forced)'* ]] && output+="-FORCED"
+    [[ -n "$lang" && "${lang,,}" != 'und' && "${lang,,}" != 'null' ]] && output+=".${lang,,}"
+    output+=".sup"
+
+    logf "Mapping track %s -> '%s'" "$id" "$(basename "$output")"
+    ffmpeg_args+=(-map "0:$id" -c copy "$output")
+  done < <(ffmpeg -loglevel info -i "$input" 2>&1 | grep -E "Stream #0:[0-9]*$lang_filter.*Subtitle.*pgssub")
+
+  if [[ ${#ffmpeg_args[@]} -eq 0 ]]; then
+    logf "%s No subtitles found in '%s' ($B--lang/-c$N: ${TOPSUBS_LANG_CODES:-'all'}), skipping..." "$(yellow 'Warning:')" "$(basename "$input")"
+    return 1
+  fi
+
+  mkdir -p "$out_dir"
+
+  [ "$sample" = 1 ] && ffmpeg_input+=(-t "$EXTRACT_SHORT_SEC")
+  ffmpeg_input+=(-i "$input" -map_chapters -1)
+
+  logf '' && log_command 'ffmpeg %s %s' "${ffmpeg_input[*]}" "${ffmpeg_args[*]}"
+  ffmpeg "${ffmpeg_input[@]}" "${ffmpeg_args[@]}"
+
+  log_t "PGS subtitles successfully extracted - output dir: '%s'" "$out_dir"
+}
+
+topsubs_fps() {
+  local input="$1" fps="$2" info_fps info_fps_org
+
+  if [ -n "$fps" ]; then
+    fps="${fps%"/1"}" && fps="${fps%"/"}"
+  elif check_extension "$input" '.mkv .mp4 .m2ts .ts'; then
+    IFS='|' read -r info_fps info_fps_org < <(mediainfo "$input" --Inform='Video;%FrameRate_Num%/%FrameRate_Den%|%FrameRate_Original_Num%/%FrameRate_Original_Den%\n' | tr -d '\r')
+
+    [[ -z "$info_fps" || "$info_fps" = "/" ]] && info_fps="$info_fps_org"
+    fps="${info_fps%"/1"}" && fps="${fps%"/"}"
+
+    if [ -n "$fps" ]; then
+      logf "Detected input FPS: %s" "$fps"
+    else
+      logf "%s Failed to auto-detect FPS, using default FPS: 23.976" "$(yellow 'Warning:')" && fps="23.976"
+    fi
+  else
+    logf "Using default FPS: 23.976" && fps="23.976"
+  fi
+
+  case "$fps" in
+  '24000/1001') fps="23.976" ;;
+  '30000/1001') fps="29.97" ;;
+  *'/'*) log_kill "Unsupported $B--fps$N value: $fps" ;;
+  esac
+
+  echo "$fps"
+}
+
+find_topsubs() {
+  local input="$1" fps="$2" out_dir="${3%/}" output y png out_png start
+  local -r tmp_dir="${TMP_DIR%/}/PGS_$(date +%s%3N)"
+  local -i i=0
+
+  [[ ! -s "$input" ]] && return 1
+
+  output=$(generate_file "$tmp_dir" "$input" 'xml')
+
+  log_t "Searching for top-positioned subtitles (Y ≤ %s) in PGS: '%s'" "$TOPSUBS_MAX_OFFSET" "$(basename "$input")"
+
+  logf '' && log_command "sup2sub -T %s -o <tmp-dir> '%s'" "$fps" "$(basename "$input")"
+  if sup2sub -T "${fps:-"23.976"}" -o "$output" "$input" >/dev/null && [[ -s "$output" ]]; then
+    logf "Successfully demuxed PGS subs: '%s'" "$(basename "$input")"
+  else
+    logf "Failed to demux PGS subs: '%s'" "$(basename "$input")" && return 1
+  fi
+
+  while IFS='|' read -r y png start; do
+    out_png="${png%.*}_Y-${y}_${start//[:.]/-}.png"
+
+    ((i++ == 0)) && log_t 'Found top-positioned subtitles (Start timestamp -> Y-Offset -> Filename):'
+    logf "  [%s] %s -> Y=%s -> %s" "$i" "$start" "$y" "$out_png"
+
+    mv "$tmp_dir/$png" "$out_dir/$out_png"
+  done < <(awk -v offset="$TOPSUBS_MAX_OFFSET" '
+    /<Event.*InTC=/ {
+      match($0, /InTC="([0-9:\.]+)"/, a);
+      start = a[1]
+    }
+    /<Graphic.*Y=/ {
+      match($0, /Y="([0-9]+)"/, y);
+      match($0, />([^<]*\.png)</, f);
+      if (y[1] <= offset) print y[1] "|" f[1] "|" start
+    }
+  ' "$output"
+  )
+
+  if ((i > 0)); then
+    mv "$output" "$out_dir/"
+  else
+    log_t 'No top-positioned subtitles found...'
+  fi
+}
+
+topsubs() {
+  local input="$1" sample="$2" fps="$3" out_dir
+  ! check_extension "$input" '.mkv .mp4 .m2ts .ts' && sample=0
+
+  out_dir=$(out_file "$input" 'sup' 'PGS')
+  out_dir="${out_dir%.*}" && [ "$sample" = 1 ] && out_dir+="_${EXTRACT_SHORT_SEC}s"
+
+  log_t "Extracting top-positioned PGS subtitles from '%s' - output dir: '%s'" "$(basename "$input")" "$out_dir"
+  [[ -e "$out_dir" ]] && logf "%s Output dir '%s' already exists, skipping..." "$(yellow 'Warning:')" "$out_dir" && return
+
+  fps=$(topsubs_fps "$input" "$fps")
+
+  if check_extension "$input" '.mkv .mp4 .m2ts .ts'; then
+    ! extract_pgs "$input" "$sample" "$out_dir" && return
+
+    while IFS= read -r -d '' input; do
+      find_topsubs "$input" "$fps" "$out_dir"
+    done < <(find "$out_dir" -maxdepth 1 -type f -name "*.sup" -print0)
+  else
+    mkdir -p "$out_dir"
+    find_topsubs "$input" "$fps" "$out_dir"
+  fi
+}
+
 help_dir() {
   local out_dir="$1" result="$1"
   [[ "$result" == /* ]] && result=$(relative_path "$out_dir")
@@ -2060,7 +2206,7 @@ help1() {
 }
 
 help() {
-  local cmd="$1" s b t q i G bin clean multiple_inputs output_info default_l5 default_l6 default_plot_info default_output='generated' default_output_format='auto-detected' default_fps
+  local cmd="$1" s b t q i G bin clean multiple_inputs output_info default_l5 default_l6 default_plot_info default_output='generated' default_output_format='auto-detected' default_fps default_langs subs_action="extract"
   local -r description=${cmd_description[$cmd]:-$(cmd_info "$cmd")} formats=$(cmd_info "$cmd" 3)
   [[ "$cmd_options" == *b* ]] && b=1
   [[ "$cmd_options" == *t* ]] && t=1 && multiple_inputs='[ignored when multiple inputs]'
@@ -2074,6 +2220,7 @@ help() {
   [ "$cmd" = 'edl' ] && default_fps='23.976'
   [ "$cmd" = 'inject' ] && default_l6='keep if present, else auto-detect'
   [ "$cmd" = 'generate' ] && default_l6='auto-detected'
+  [ "$cmd" = 'topsubs' ] && default_langs="$TOPSUBS_LANG_CODES" && subs_action="process" || default_langs="$SUBS_LANG_CODES"
 
   case "$cmd_options" in
   *H*) help_left+=17 ;;
@@ -2081,7 +2228,7 @@ help() {
   *[eF]*) help_left+=15 ;;
   *m*) help_left+=14 ;;
   *P*) help_left+=13 ;;
-  *[bxs]*) help_left+=11 ;;
+  *[bxsY]*) help_left+=11 ;;
   *[ltku]*) help_left+=10 ;;
   *S*) help_left+=9 ;;
   *[opc]*) help_left+=8 ;;
@@ -2179,8 +2326,10 @@ help() {
                                          $B- L8H[_NITS]$N – L8 Hue Vectors
                                          ${B}NITS$N = 100 (default), 600, 1000 or MAX (highest available)
                                          L8 plots require CM v4.0 RPU"
-  help1 "-c, --lang <C1[,...]>           ISO 639-2 lang codes of subtitle tracks to extract
-                                         [default: $B${SUBS_LANG_CODES:-all}$N; example value: 'eng,pol']"
+  help1 "-c, --lang <C1[,...]>           ISO 639-2 lang codes of subtitle tracks to $subs_action
+                                         [default: $B${default_langs:-all}$N; example value: 'eng,pol']"
+  help1 'Y' "--max-y <MAX_OFFSET>        Maximum Y offset to consider subs as top-positioned
+                                         [default: $B$TOPSUBS_MAX_OFFSET$N]"
   clean="-m, --clean-filenames <0|1>     Controls output filename cleanup [default: $B$CLEAN_FILENAMES$N]
                                          [ignored if $B--output$N is set]
                                          [e.g., 'The.Show.S01E01.HDR' → 'The Show S01E01']
@@ -2238,7 +2387,7 @@ show_help() {
   echo "CLI tool for processing DV videos, with a focus on CMv4.0 + P7 CMv2.9 hybrid creation"
   echo1 "${BU}Usage:$N $REMUXER [OPTIONS] <COMMAND>"
   echo1 "${BU}Commands:$N"
-  for cmd in info plot shift sync fix generate inject remux extract cuts subs png mp3 edl; do
+  for cmd in info plot shift sync fix generate inject remux extract cuts subs topsubs png mp3 edl; do
     help0 "$cmd            $(cmd_info "$cmd")"
   done
   echo1 "${BU}Options:$N"
@@ -2422,7 +2571,7 @@ parse_args() {
 
   local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir sample_duration
   local frames frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto timestamps
-  local cuts_clear cuts_first cuts_consecutive json prores_profile tuning fps mdl scene_cuts l5 l5_a l5v l5v_a l6_source l6
+  local cuts_clear cuts_first cuts_consecutive json prores_profile tuning fps mdl scene_cuts l5 l5_a l5v l5v_a l6_source l6 max_y
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2467,6 +2616,7 @@ parse_args() {
     --cuts-clear)                cuts_clear=$(parse_option "$2" "$cuts_clear" "$cmd" "$1" 'H' '<frame-range>' '[0-9]+(-[0-9]+)?' 1) ;;
     --cuts-first)                cuts_first=$(parse_option "$2" "$cuts_first" "$cmd" "$1" 'F' '0, 1') ;;
     --cuts-consecutive)    cuts_consecutive=$(parse_option "$2" "$cuts_consecutive" "$cmd" "$1" 'F' '0, 1') ;;
+    --max-y)                          max_y=$(parse_option "$2" "$max_y" "$cmd" "$1" 'Y' '<max-offset>' '[0-9]+') ;;
     --subs)                            subs=$(parse_file "$2" "$subs" "$cmd" "$1" 'e' '.srt') ;;
     --subs-find)                  find_subs=$(parse_option "$2" "$find_subs" "$cmd" "$1" 'e' '0, 1') ;;
     --subs-copy)                  copy_subs=$(parse_option "$2" "$copy_subs" "$cmd" "$1" 'e' '0, 1, <ISO 639-2 lang code>' '(0|1|[a-z]{3})') ;;
@@ -2520,7 +2670,8 @@ parse_args() {
   [[ -n "$cuts_consecutive" ]] && FIX_CUTS_CONSEC="$cuts_consecutive"
   [[ -n "$find_subs" ]] && SUBS_AUTODETECTION="$find_subs"
   [[ -n "$copy_subs" ]] && SUBS_COPY_MODE="$copy_subs"
-  [[ -n "$lang_codes" ]] && SUBS_LANG_CODES=$(deduplicate_list "$lang_codes")
+  [[ -n "$lang_codes" ]] && SUBS_LANG_CODES=$(deduplicate_list "$lang_codes") && TOPSUBS_LANG_CODES="$SUBS_LANG_CODES"
+  [[ -n "$max_y" ]] && TOPSUBS_MAX_OFFSET="$max_y"
   [[ -n "$copy_audio" ]] && AUDIO_COPY_MODE="$copy_audio"
   [[ -n "$title_auto" || -n "$title" ]] && TITLE_SHOWS_AUTO="${title_auto:-0}" && TITLE_MOVIES_AUTO="${title_auto:-0}"
   [[ -n "$tracks_auto" ]] && TRACK_NAMES_AUTO="$tracks_auto"
@@ -2567,6 +2718,7 @@ parse_args() {
     extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
     cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;
     subs) subs "$input" "$output" ;;
+    topsubs) topsubs "$input" "$sample" "$fps" ;;
     png) png "$input" "$timestamps" "$output" ;;
     mp3) mp3 "$input" "$sample" "$output" ;;
     edl) edl "$input" "$fps" "$output" ;;

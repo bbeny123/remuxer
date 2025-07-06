@@ -32,8 +32,10 @@ All required external tools must be downloaded and placed in the directory speci
     - `mkvmerge.exe`
     - `mkvextract.exe`
 - [`dovi_tool`](https://github.com/quietvoid/dovi_tool/releases) (v2.3.0)
-- [`cm_analyze`](https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools) (v5.6.1) —
-  optional (used by `generate` command)
+- [`cm_analyze`](https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools) (v5.6.1) — optional (used by `generate` command)
+- `topsubs` command only:
+  - [`Java JRE/JDK`](https://adoptium.net/temurin/releases?version=21&mode=filter&os=any&arch=any) (v21.0.7)
+  - [`BDSup2Sub`](https://github.com/mjuhasz/BDSup2Sub) (v5.1.2 [`.jar`](https://raw.githubusercontent.com/wiki/mjuhasz/BDSup2Sub/downloads/BDSup2Sub.jar))
 
 > The versions listed above are those with which `remuxer` was tested.  
 > Other versions may work, but compatibility is not guaranteed.
@@ -82,6 +84,8 @@ Most of these variables can also be **overridden** at runtime using the correspo
 | `AUDIO_COPY_MODE`<br/>*`--audio-copy`*                | Input's audio tracks copy mode                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `1` - 1st track only<br/>`2` - 1st + compatibility if 1st is *TrueHD*<br/>`3` - all *(default)*<br/>                                                                                                                                          |
 | `SUBS_COPY_MODE`<br/>*`--subs-copy`*                  | Input's subtitle tracks copy mode                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `0` - none<br/>`1` - all *(default)*<br/>`<lng>` - ISO 639-2 lang code based                                                                                                                                                                  |
 | `SUBS_LANG_CODES`<br/>*`--lang`*                      | Subtitle language ISO 639-2 codes to extract<br/>*(**subs** command only)*                                                                                                                                                                                                                                                                                                                                                                                                                                                          | *\<comma-separated ISO 639-2 codes>*<br/>**Default:** `all`                                                                                                                                                                                   |
+| `TOPSUBS_LANG_CODES`<br/>*`--lang`*                   | Subtitle language ISO 639-2 codes to process<br/>*(**topsubs** command only)*                                                                                                                                                                                                                                                                                                                                                                                                                                                       | *\<comma-separated ISO 639-2 codes>*<br/>**Default:** `all`                                                                                                                                                                                   |
+| `TOPSUBS_MAX_OFFSET`<br/>*`--max-y`*                  | Y offset to consider subs as top-positioned<br/>*(**topsubs** command only)*                                                                                                                                                                                                                                                                                                                                                                                                                                                        | *\<offset in pixels>*<br/>**Default:** `600`                                                                                                                                                                                                  |
 | `PRORES_PROFILE`<br/>`PRORES_MACOS`<br/>*`--profile`* | Default **ProRes** encoding profile by encoder:<br/>&nbsp;&nbsp;**•** `PRORES_PROFILE` → `prores_ks`<br/>&nbsp;&nbsp;**•** `PRORES_MACOS` → `prores_videotoolbox`                                                                                                                                                                                                                                                                                                                                                                   | `0` - 422 Proxy<br/>`1` - 422 LT<br/>`2` - 422 *(default `PRORES_MACOS`)*<br/>`3` - 422 HQ *(default `PRORES_PROFILE`)*<br/>`4` - 4444<br/>`5` - 4444 XQ                                                                                      |
 | `L1_TUNING`<br/>*`--tuning`*                          | **Dolby Vision L1** analysis tuning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `0` / `legacy` - Legacy CM4<br/>`1` / `most` - Most Highlight Detail<br/>`2` / `more` - More Highlight Detail<br/>`3` / `balanced` - Balanced *(default)*<br/>`4` / `less` - Less Highlight Detail<br/>`5` / `least` - Least Highlight Detail |
 | `EXTRACT_SHORT_SEC`                                   | Sample duration in seconds<br/>*(related with **--sample** option)*                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | *\<duration in seconds>*<br/>**Default:** `23`                                                                                                                                                                                                |
@@ -350,6 +354,23 @@ Options:
   -o, --output <OUTPUT>        Output file path [default: generated]
   -c, --lang <C1[,...]>        ISO 639-2 lang codes of subtitle tracks to extract
   -m, --clean-filenames <0|1>  Controls output filename cleanup [default: 1]
+```
+
+### `topsubs` command
+
+**Description:** Extract **top-positioned** `PGS` subtitles
+
+```bash
+Usage: remuxer topsubs [OPTIONS] [INPUT...]
+
+Options:
+  -i, --input <INPUT>       Input file/dir path [can be used multiple times]
+  -x, --formats <F1[,...]>  Filter files by format in dir inputs
+  -t, --input-type <TYPE>   Filter files by type in dir inputs
+  -s, --sample [<SECONDS>]  Process only the first N seconds of input
+      --fps <FPS>           Frame rate [default: auto-detected]
+  -c, --lang <C1[,...]>     ISO 639-2 lang codes of subtitle tracks to process
+      --max-y <MAX_OFFSET>  Maximum Y offset to consider subs as top-positioned
 ```
 
 ### `png` command

@@ -26,7 +26,7 @@ _remuxer_complete() {
   cmd="${COMP_WORDS[1]}"
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    mapfile -t COMPREPLY < <(compgen -W "info plot shift sync fix generate inject remux extract cuts subs png mp3 edl" -- "$cur")
+    mapfile -t COMPREPLY < <(compgen -W "info plot shift sync fix generate inject remux extract cuts subs topsubs png mp3 edl" -- "$cur")
     return
   fi
 
@@ -35,6 +35,7 @@ _remuxer_complete() {
   generate) formats="mkv mp4 m2ts ts hevc mov" ;;
   remux | png | mp3) formats="mkv mp4 m2ts ts" && output_formats="mkv mp4" ;;
   subs) formats="mkv" && output_formats="srt" ;;
+  topsubs) formats="mkv mp4 m2ts ts sup pgs" ;;
   edl) formats="txt edl" ;;
   esac
 
@@ -68,7 +69,7 @@ _remuxer_complete() {
   --mdl) values="P3_1000 BT_1000 P3_2000 BT_2000 P3_4000 BT_4000" && cur=${cur^^} ;;
   --fps) values="23.976 24000/1001 24 25 30 50 48 60" && [ "$cmd" != 'edl' ] && values+=" 29.97 59.94" ;;
   --profile) values="0 1 2 3 4 5" ;;
-  -[fuk] | --shift | --title | --frames | --time | --l5 | --l5-analysis | --cuts-clear) return ;;
+  -[fuk] | --shift | --title | --frames | --time | --l5 | --l5-analysis | --cuts-clear | --max-y) return ;;
   esac
 
   if [[ -n "$all_values" ]]; then
@@ -107,6 +108,7 @@ _remuxer_complete() {
   extract) options="--formats --input-type --output --output-format --sample --profile --info --plot" ;;
   cuts) options="--formats --input-type --output --sample" ;;
   subs) options="--input-type --output --lang --clean-filenames" ;;
+  topsubs) options="--formats --input-type --sample --fps --lang --max-y" ;;
   png) options="--formats --input-type --output --time" ;;
   mp3) options="--formats --input-type --output --sample" ;;
   edl) options="--formats --input-type --output --fps" ;;
