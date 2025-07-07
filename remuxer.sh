@@ -8,7 +8,7 @@ readonly BU="$B$U"
 readonly REMUXER="$B$(basename "$0")$N" VERSION="2.0.0"
 readonly START_TIME=$(date +%s%1N)
 readonly DEBUG_LOG='0'
-readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/../tools"
+readonly TOOLS_DIR="$(dirname -- "${BASH_SOURCE[0]}")/tools"
 
 alias jq="'$TOOLS_DIR/jq-win64.exe'"                                       # v1.7.1:  https://jqlang.org/download/
 alias mediainfo="'$TOOLS_DIR/MediaInfo.exe'"                               # v25.04:  https://mediaarea.net/pl/MediaInfo/Download
@@ -33,10 +33,10 @@ SUBS_AUTODETECTION='1'           # 0 - disabled,       1 - enabled
 TITLE_SHOWS_AUTO='0'             # 0 - disabled,       1 - enabled
 TITLE_MOVIES_AUTO='1'            # 0 - disabled,       1 - enabled
 TRACK_NAMES_AUTO='1'             # 0 - disabled,       1 - enabled [e.g., audio: DTS 5.1, subs: Polish]
-AUDIO_COPY_MODE='2'              # 1 - 1st track only, 2 - 1st + compatibility, 3 - all
-SUBS_COPY_MODE='0'               # 0 - none,           1 - all,                 <lng> - based on ISO 639-2 lang code [e.g., eng]
-SUBS_LANG_CODES='pol,eng,spa'    # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
-TOPSUBS_LANG_CODES='pol,eng,spa' # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
+AUDIO_COPY_MODE='3'              # 1 - 1st track only, 2 - 1st + compatibility, 3 - all
+SUBS_COPY_MODE='1'               # 0 - none,           1 - all,                 <lng> - based on ISO 639-2 lang code [e.g., eng]
+SUBS_LANG_CODES='all'            # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
+TOPSUBS_LANG_CODES='all'         # <empty> - all,                               <lng> - based on ISO 639-2 lang code [e.g., eng]
 TOPSUBS_MAX_OFFSET='600'
 L1_TUNING='balanced'             # 0 - legacy,         1 - most,   2 - more,    3 - balanced,    4 - less,     5 - least
 FFMPEG_STRICT=1                  # 0 - disabled,       1 - enabled
@@ -277,7 +277,11 @@ file_exists() {
 }
 
 dovi_input() {
-  local -r input=$(rpu_or_sample "$1" 1)
+  local input="$1"
+
+  ! ffmpeg -loglevel info -i "$input" 2>&1 | grep -q 'Stream.*Video.*hevc' && return 1
+
+  input=$(rpu_or_sample "$1" 1)
   ! dovi_tool info -s "$input" 2>&1 | grep -q 'No RPU found'
 }
 
