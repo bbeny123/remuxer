@@ -1,6 +1,6 @@
 # remuxer
 
-`remuxer` is a *CLI tool* for processing ***Dolby Vision*** videos, with a focus on **CMv4.0 + P7 CMv2.9** hybrid
+`remuxer` is a *CLI tool* for processing ***DV*** videos, with a focus on **CMv4.0 + P7 CMv2.9** hybrid
 creation.
 
 > The script is partially based on **[DoVi_Scripts](https://github.com/R3S3t9999/DoVi_Scripts)**
@@ -33,6 +33,11 @@ All required external tools must be downloaded and placed in the directory speci
     - `mkvextract.exe`
 - [`dovi_tool`](https://github.com/quietvoid/dovi_tool/releases) (v2.3.0)
 - [`cm_analyze`](https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools) (v5.6.1) — optional (used by `generate` command)
+- `extract` (ProRes) & `generate` commands (FEL input):
+    - [VapourSynth](https://www.vapoursynth.com) (R73)
+        - `vspipe.exe`
+        - [ffms2](https://github.com/FFMS/ffms2/releases) VS plugin (v5.0)
+        - [FelBaker](https://github.com/bbeny123/felbaker/releases) VS plugin (v1.0.0)
 - `topsubs` command only:
     - [`Java JRE/JDK`](https://adoptium.net/temurin/releases?version=21&mode=filter&os=any&arch=any) (v21.0.7)
     - [`BDSup2Sub`](https://github.com/mjuhasz/BDSup2Sub) (v5.1.2 [`.jar`](https://raw.githubusercontent.com/wiki/mjuhasz/BDSup2Sub/downloads/BDSup2Sub.jar))
@@ -87,9 +92,12 @@ Most of these variables can also be **overridden** at runtime using the correspo
 | `TOPSUBS_LANG_CODES`<br/>*`--lang`*                   | Subtitle language ISO 639-2 codes to process<br/>*(**topsubs** command only)*                                                                                                                                                                                                                                                                                                                                                                                                                                                       | *\<comma-separated ISO 639-2 codes>*<br/>**Default:** `all`                                                                                                                                                                                   |
 | `TOPSUBS_MAX_OFFSET`<br/>*`--max-y`*                  | Y offset to consider subs as top-positioned<br/>*(**topsubs** command only)*                                                                                                                                                                                                                                                                                                                                                                                                                                                        | *\<offset in pixels>*<br/>**Default:** `600`                                                                                                                                                                                                  |
 | `PRORES_PROFILE`<br/>`PRORES_MACOS`<br/>*`--profile`* | Default **ProRes** encoding profile by encoder:<br/>&nbsp;&nbsp;**•** `PRORES_PROFILE` → `prores_ks`<br/>&nbsp;&nbsp;**•** `PRORES_MACOS` → `prores_videotoolbox`                                                                                                                                                                                                                                                                                                                                                                   | `0` - 422 Proxy<br/>`1` - 422 LT<br/>`2` - 422 *(default `PRORES_MACOS`)*<br/>`3` - 422 HQ *(default `PRORES_PROFILE`)*<br/>`4` - 4444<br/>`5` - 4444 XQ                                                                                      |
-| `L1_TUNING`<br/>*`--tuning`*                          | **Dolby Vision L1** analysis tuning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `0` / `legacy` - Legacy CM4<br/>`1` / `most` - Most Highlight Detail<br/>`2` / `more` - More Highlight Detail<br/>`3` / `balanced` - Balanced *(default)*<br/>`4` / `less` - Less Highlight Detail<br/>`5` / `least` - Least Highlight Detail |
+| `L1_TUNING`<br/>*`--tuning`*                          | **DV L1** analysis tuning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `0` / `legacy` - Legacy CM4<br/>`1` / `most` - Most Highlight Detail<br/>`2` / `more` - More Highlight Detail<br/>`3` / `balanced` - Balanced *(default)*<br/>`4` / `less` - Less Highlight Detail<br/>`5` / `least` - Least Highlight Detail |
 | `EXTRACT_SHORT_SEC`                                   | Sample duration in seconds<br/>*(related with **--sample** option)*                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | *\<duration in seconds>*<br/>**Default:** `23`                                                                                                                                                                                                |
 | `FFMPEG_STRICT`                                       | Controls FFmpeg experimental strict mode<br/>**Note:** Avoid using **untrusted inputs** if `1`                                                                                                                                                                                                                                                                                                                                                                                                                                      | `0` - disabled<br/>`1` - enabled *(default)*                                                                                                                                                                                                  |
+| `FELBAKER_PATH`                                       | Absolute path to `FelBaker` **VS plugin**<br/>_If empty, plugin must be auto-detected by **VS**_                                                                                                                                                                                                                                                                                                                                                                                                                                    | *\<abosulte path>*<br/>**Default:** `felbaker.dll`                                                                                                                                                                                            |
+| `FFMS2_PATH`                                          | Absolute path to `FFMS2` **VS plugin**<br/>_If empty, plugin must be auto-detected by **VS**_                                                                                                                                                                                                                                                                                                                                                                                                                                       | *\<abosulte path>*<br/>**Default:** `ffms2.dll`                                                                                                                                                                                               |
+| `FFMS2_THREADS`                                       | Number of decoding threads used by `FFMS2`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | *\<threads number>*<br/>**Default:** `4`                                                                                                                                                                                                      |
 
 ---
 
@@ -99,17 +107,18 @@ Most of these variables can also be **overridden** at runtime using the correspo
 Usage: remuxer [OPTIONS] <COMMAND>
 
 Commands:
-  info           Show Dolby Vision information
+  info           Show DV information
   plot           Plot L1/L2/L8 metadata
   shift          Calculate frame shift
-  sync           Synchronize Dolby Vision RPU files
-  fix            Fix or adjust Dolby Vision RPU(s)
-  generate       Generate Dolby Vision P8 RPU for HDR10 video(s)
-  inject         Sync & Inject Dolby Vision RPU
+  sync           Synchronize DV RPU files
+  fix            Fix or adjust DV RPU(s)
+  generate       Generate DV P8 RPU for HDR10 video(s)
+  inject         Sync & Inject DV RPU
   remux          Remux video file(s)
   extract        Extract RPU(s) or base layer(s), or convert to ProRes
   cuts           Extract scene-cut frame list(s)
   subs           Extract .srt subtitles
+  topsubs        Extract top-positioned PGS subtitles
   png            Extract video frame(s) as PNG image(s)
   mp3            Extract audio track(s) as MP3 file(s)
   edl            Convert scene-cut list between .txt and .edl
@@ -135,7 +144,7 @@ Options:
 
 ### `info` command
 
-**Description:** Show *Dolby Vision* information
+**Description:** Show *DV* information
 
 ```bash
 Usage: remuxer info [OPTIONS] [INPUT...]
@@ -196,7 +205,7 @@ Options:
 
 ### `fix` command
 
-**Description:** Fix or adjust *Dolby Vision RPU(s)*
+**Description:** Fix or adjust *DV RPU(s)*
 
 ```bash
 Usage: remuxer fix [OPTIONS] [INPUT...]
@@ -206,8 +215,8 @@ Options:
   -x, --formats <F1[,...]>        Filter files by format in dir inputs
   -t, --input-type <TYPE>         Filter files by type in dir inputs
   -o, --output <OUTPUT>           Output file path [default: generated]
-      --l5 <T,B[,L,R]>            Set Dolby Vision L5 active area offsets
-      --l6 <MAX_CLL,MAX_FALL>     Set Dolby Vision L6 MaxCLL/MaxFALL
+      --l5 <T,B[,L,R]>            Set DV L5 active area offsets
+      --l6 <MAX_CLL,MAX_FALL>     Set DV L6 MaxCLL/MaxFALL
       --l6-source <FILE>          File path to use for L6 MaxCLL/FALL detection
       --cuts-clear <FS-FE[,...]>  Clear scene-cut flag in specified frame ranges
       --cuts-first <0|1>          Force first frame as scene-cut [default: 1]
@@ -219,7 +228,7 @@ Options:
 
 ### `generate` command
 
-**Description:** Generate *Dolby Vision P8 RPU* for *HDR10* video(s)
+**Description:** Generate *DV P8 RPU* for *HDR10* video(s)
 
 ```bash
 Usage: remuxer generate [OPTIONS] [INPUT...]
@@ -230,16 +239,17 @@ Options:
   -t, --input-type <TYPE>        Filter files by type in dir inputs
   -o, --output <OUTPUT>          Output file path [default: generated]
       --profile <0-5>            Controls ProRes encoding profile (0 = Proxy, 5 = 4444 XQ)
+      --el <FILE>                EL .hevc [req. matching P7 FEL .hevc BL input]
       --cuts <FILE>              Scene-cuts file path [default: extracted from input]
       --tuning <0-5>             Controls L1 analysis tuning [default: balanced]
       --fps <FPS>                Frame rate [default: auto-detected]
       --mdl <MDL>                Mastering display [default: auto-detected]
-      --l5 <T,B[,L,R]>           Dolby Vision L5 active area offsets
+      --l5 <T,B[,L,R]>           DV L5 active area offsets
       --l5-analysis <T,B[,L,R]>  L5 active area offsets (for analysis only)
       --l5v <FILE>               Variable L5 metadata JSON config
       --l5v-analysis <FILE>      Variable L5 metadata JSON config (for analysis only)
       --l5v-example              Show example JSON for --l5v/--l5v-analysis
-      --l6 <MAX_CLL,MAX_FALL>    Dolby Vision L6 MaxCLL/MaxFALL
+      --l6 <MAX_CLL,MAX_FALL>    DV L6 MaxCLL/MaxFALL
       --cuts-first <0|1>         Force first frame as scene-cut [default: 1]
       --cuts-consecutive <0|1>   Controls consecutive scene-cuts fixing [default: 1]
   -n, --info <0|1>               Controls intermediate info commands [default: 1]
@@ -262,8 +272,8 @@ Options:
   -f, --shift <SHIFT>             Frame shift value [default: auto-calculated]
   -l, --levels <L1[,...]>         RPU levels to inject [default: 3,8,9,11,254]
   -w, --raw-rpu                   Inject input RPU instead of transferring levels
-      --l5 <T,B[,L,R]>            Set Dolby Vision L5 active area offsets
-      --l6 <MAX_CLL,MAX_FALL>     Set Dolby Vision L6 MaxCLL/MaxFALL
+      --l5 <T,B[,L,R]>            Set DV L5 active area offsets
+      --l6 <MAX_CLL,MAX_FALL>     Set DV L6 MaxCLL/MaxFALL
       --cuts-clear <FS-FE[,...]>  Clear scene-cut flag in specified frame ranges
       --cuts-first <0|1>          Force first frame as scene-cut [default: 1]
       --cuts-consecutive <0|1>    Controls consecutive scene-cuts fixing [default: 1]
@@ -309,7 +319,7 @@ Options for .mkv / .mp4 output:
 
 ### `extract` command
 
-**Description:** Extract *Dolby Vision RPU(s)* or `.hevc` base layer(s), or convert to **ProRes** (`.mov`)
+**Description:** Extract *DV RPU(s)* or `.hevc` base layer(s), or convert to **ProRes** (`.mov`)
 
 ```bash
 Usage: remuxer extract [OPTIONS] [INPUT...]
@@ -322,6 +332,7 @@ Options:
   -e, --output-format <FORMAT>  Output format [default: bin]
   -s, --sample [<SECONDS>]      Process only the first N seconds of input
       --profile <0-5>           Controls ProRes encoding profile (0 = Proxy, 5 = 4444 XQ)
+      --el <FILE>               EL .hevc [req. .mov output + matching P7 FEL .hevc BL input]
   -n, --info <0|1>              Controls intermediate info commands [default: 1]
   -p, --plot <P1[,...]>         Controls L1/L2/L8 intermediate plotting
 ```
@@ -377,7 +388,7 @@ Options:
 
 **Description:** Extract *video frame(s)* as `PNG` image(s)
 
-> Useful for checking **Dolby Vision L5** offsets by measuring black bars (e.g., using `MS Paint`)
+> Useful for checking **DV L5** offsets by measuring black bars (e.g., using `MS Paint`)
 
 ```bash
 Usage: remuxer png [OPTIONS] [INPUT...]

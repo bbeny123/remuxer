@@ -19,6 +19,11 @@ alias dovi_tool="'$TOOLS_DIR/dovi_tool.exe'"                               # v2.
 alias cm_analyze="'$TOOLS_DIR/cm_analyze.exe'"                             # v5.6.1:  https://customer.dolby.com/content-creation-and-delivery/dolby-vision-professional-tools
 alias java="java"                                                          # v21.0.7: https://adoptium.net/temurin/releases?version=21&mode=filter&os=any&arch=any
 alias sup2sub="java -jar '$TOOLS_DIR/BDSup2Sub.jar'"                       # v5.1.2:  https://raw.githubusercontent.com/wiki/mjuhasz/BDSup2Sub/downloads/BDSup2Sub.jar
+alias vspipe="vspipe"                                                      # R73:     https://www.vapoursynth.com/
+
+FELBAKER_PATH="felbaker.dll"                                               # v1.0.0:  https://github.com/bbeny123/felbaker
+FFMS2_PATH="ffms2.dll"                                                     # v5.0:    https://github.com/FFMS/ffms2
+FFMS2_THREADS=4
 
 OUT_DIR="$(pwd)"
 PLOTS_DIR=""                     # <empty> - same as OUT_DIR
@@ -45,15 +50,15 @@ PRORES_MACOS='2'
 EXTRACT_SHORT_SEC='23'
 
 declare -A commands=(
-  [info]="    Show Dolby Vision information                         | xtospu       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [info]="    Show DV information                                   | xtospu       | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [plot]="    Plot L1/L2/L8 metadata                                | xtosp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [shift]="   Calculate frame shift                                 | b            | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [sync]="    Synchronize Dolby Vision RPU files                    | bofnp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [fix]="     Fix or adjust Dolby Vision RPU(s)                     | xtojnFHS     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
-  [generate]="Generate Dolby Vision P8 RPU for HDR10 video(s)       | xtonpFGIP    | .mkv, .mp4, .m2ts, .ts, .hevc, .mov"
-  [inject]="  Sync & Inject Dolby Vision RPU                        | boeqflwnmpFH | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [sync]="    Synchronize DV RPU files                              | bofnp        | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [fix]="     Fix or adjust DV RPU(s)                               | xtojnFHS     | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
+  [generate]="Generate DV P8 RPU for HDR10 video(s)                 | xtonpEFGIP   | .mkv, .mp4, .m2ts, .ts, .hevc, .mov"
+  [inject]="  Sync & Inject DV RPU                                  | boeqflwnmpFH | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [remux]="   Remux video file(s)                                   | xtoemr       | .mkv, .mp4, .m2ts, .ts"
-  [extract]=" Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpP     | .mkv, .mp4, .m2ts, .ts, .hevc"
+  [extract]=" Extract RPU(s) or base layer(s), or convert to ProRes | xtosenpEP    | .mkv, .mp4, .m2ts, .ts, .hevc"
   [cuts]="    Extract scene-cut frame list(s)                       | xtos         | .mkv, .mp4, .m2ts, .ts, .hevc, .bin"
   [subs]="    Extract .srt subtitles                                | tocm         | .mkv"
   [topsubs]=" Extract top-positioned PGS subtitles                  | xtscIY       | .mkv, .mp4, .m2ts, .ts, .sup, .pgs"
@@ -285,6 +290,14 @@ dovi_input() {
   ! dovi_tool info -s "$input" 2>&1 | grep -q 'No RPU found'
 }
 
+rpu_input() {
+  local bl="$1" el="$2"
+
+  [ -n "$el" ] && dovi_input "$el" && echo "$el" && return 0
+
+  echo "$bl"
+}
+
 cm40_input() {
   local -r input=$(to_rpu "$1" 0 1)
   dovi_tool info -s "$input" | grep -q 'CM v4.0'
@@ -300,20 +313,76 @@ p7_input() {
   dovi_tool info -s "$input" 2>&1 | grep -q 'Profile: 7'
 }
 
+fel_input() {
+  local -r input=$(rpu_or_sample "$1" 1)
+  dovi_tool info -s "$input" 2>&1 | grep -q 'Profile: 7 (FEL)'
+}
+
 rpu_frames() {
   local input=$(to_rpu "$1" 0 1)
   dovi_tool info -s "$input" | grep -oE 'Frames:\s*[0-9]+' | grep -oE '[0-9]+'
 }
 
+vs_bake() {
+  local bl="$1" el="$2" short_sample="$3" width="$4" height="$5" width_el height_el
+
+  log_t "FEL input detected, baking..." "$input_name" "$type"
+
+  if [ -z "$el" ]; then
+    local prefix=''
+    [ "$short_sample" = 1 ] && prefix="-${EXTRACT_SHORT_SEC}s"
+    bl_path=$(out_file "$bl" 'hevc' "BL$prefix")
+    el=$(out_file "$bl" 'hevc' "EL$prefix")
+    to_hevc "$bl" 1 "$short_sample" "$bl_path" 1 "$el" >/dev/null
+    bl="$bl_path"
+  fi
+
+  IFS='|' read -r width_el height_el < <(mediainfo "$el" --Inform='Video;%Width%|%Height%\n' | tr -d '\r')
+
+  output=$(tmp_file "$bl" 'vpy' "BAKE")
+
+  bl=$(realpath "$bl")
+  el=$(realpath "$el")
+
+  {
+      echo "import vapoursynth as vs"
+      echo "core = vs.core"
+
+      [[ -n "$FFMS2_PATH" ]] && echo "core.std.LoadPlugin('$(windows_safe_path "$FFMS2_PATH")')"
+      [[ -n "$FELBAKER_PATH" ]] && echo "core.std.LoadPlugin('$(windows_safe_path "$FELBAKER_PATH")')"
+
+      echo "bl = core.ffms2.Source('$(windows_safe_path "$bl")', threads=${FFMS2_THREADS:-4})"
+      echo "el = core.ffms2.Source('$(windows_safe_path "$el")', threads=${FFMS2_THREADS:-4})"
+      [[ "$width" != "$width_el" || "$height" != "$height_el" ]] && echo "el = core.resize.Spline16(el, width=${width}, height=${height})"
+      echo "baked = core.fel.Bake(bl, el, no_resample=1)"
+      echo "baked444 = core.resize.Spline16(baked, format=vs.YUV444P12)"
+      echo "core.fel.ToRGB(baked444).set_output()"
+  } > "$output"
+
+  log_c "VapourSynth baking script %s:" "$(basename "$output")"
+  cat "$output" >&2
+
+  echo "$output"
+}
+
 to_prores() {
-  local input="$1" short_sample="$2" output="$3" prefix='PRORES' type='ProRes' ffmpeg_cmd=()
+  local input="$1" el="$2" short_sample="$3" output="$4" fps="$5" width height prefix='PRORES' type='ProRes' ffmpeg_cmd=() vpy
 
   file_exists "$input" 'input' 1
+  [ -n "$el" ] && ! check_extension "$input" ".hevc" && el="" && log_t "%s $B--el$N has effect only for .hevc input" "$(yellow 'Warning:')"
   if check_extension "$input" ".mov"; then
     [ "$short_sample" = 1 ] && log_kill "Extracting ProRes sample from a ProRes file is not supported (input: '$input')" 2
     echo "$input" && return
   fi
   check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc' 1
+  file_exists "$el" 'el' && check_extension "$el" '.hevc' 1
+
+  if [ -n "$el" ] || fel_input "$input"; then
+    IFS='|' read -r width height < <(mediainfo "$input" --Inform='Video;%Width%|%Height%\n' | tr -d '\r')
+    width=${width:-3840}; height=${height:-2160}
+    vpy=$(vs_bake "$input" "$el" "$short_sample" "$width" "$height")
+    prefix+="-FEL"
+  fi
 
   [ "$short_sample" = 1 ] && type+=" sample" && prefix+="-${EXTRACT_SHORT_SEC}s"
   output=$(out_file "$input" 'mov' "$prefix" "$output")
@@ -333,9 +402,20 @@ to_prores() {
       logf "%s '%s' is not HDR10, default color primaries (yuv420p10le/bt2020nc/bt2020/smpte2084) may be wrong - check input" "$(yellow 'Warning:')" "$input_name"
     fi
 
-    log_command 'ffmpeg -i "%s" -map 0:v:0 -map_chapters -1 %s -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an "%s"' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
-    if ! ffmpeg -i "$input" -map 0:v:0 -map_chapters -1 "${ffmpeg_cmd[@]}" -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an "$output" >&2; then
-      log_kill "$(red 'Error:') Failed to encode '$input' to $type"
+    ffmpeg_cmd+=(-color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an)
+
+    if [ -n "$vpy" ]; then
+      local video_size="${width}x${height}"
+      fps=$(detect_fps "$input" "$fps")
+      log_command 'vspipe "%s" - | ffmpeg -f rawvideo -pixel_format gbrp16le -colorspace rgb -color_primaries bt2020 -color_trc smpte2084 -color_range pc -field_order progressive -video_size %s -r %s -i - %s %s' "$vpy" "$video_size" "$fps" "${ffmpeg_cmd[*]}" "$(basename "$output")"
+      if ! vspipe "$vpy" - | ffmpeg -f rawvideo -pixel_format gbrp16le -colorspace rgb -color_primaries bt2020 -color_trc smpte2084 -color_range pc -field_order progressive -video_size "$video_size" -r "$fps" -i - "${ffmpeg_cmd[@]}" "$output" >&2; then
+        log_kill "$(red 'Error:') Failed to encode '$input' to $type"
+      fi
+    else
+      log_command 'ffmpeg -i "%s" -map 0:v:0 -map_chapters -1 %s -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc -an "%s"' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
+      if ! ffmpeg -i "$input" -map 0:v:0 -map_chapters -1 "${ffmpeg_cmd[@]}" "$output" >&2; then
+        log_kill "$(red 'Error:') Failed to encode '$input' to $type"
+      fi
     fi
 
     log_t "Successfully encoded '%s' to %s - output file: '%s'" "$input_name" "$type" "$output"
@@ -347,7 +427,7 @@ to_prores() {
 }
 
 to_hevc() {
-  local input="$1" bl_only="$2" short_sample="$3" output="$4" out_dir="$5" prefix='HEVC' type='HEVC' ffmpeg_cmd=()
+  local input="$1" bl_only="$2" short_sample="$3" output="$4" out_dir="$5" el_output="$6" prefix='HEVC' type='HEVC' ffmpeg_cmd=()
 
   file_exists "$input" 'input' 1
   [[ "$short_sample" != 1 && "$bl_only" != 1 ]] && check_extension "$input" ".hevc" && echo "$input" && return
@@ -368,20 +448,29 @@ to_hevc() {
   local -r input_name=$(basename "$input")
   log_t "Extracting %s for: '%s'..." "$type" "$input_name"
 
+  if [[ -n "$el_output" ]]; then
+      [[ -f "$output" && ! -f "$el_output" ]] && log_kill "$(red 'Error:') Cannot extract EL: BL file already exists ($output)"
+      [[ ! -f "$output" && -f "$el_output" ]] && log_kill "$(red 'Error:') Cannot extract BL: EL file already exists ($el_output)"
+  fi
+
   if [[ ! -f "$output" ]]; then
+    local log_el=""
+    [[ -n "$el_output" ]] && log_el=" -e \"$(basename "$el_output")\""
+    [[ -z "$el_output" ]] && el_output=$(tmp_file "$input" 'hevc' "EL")
     if [ "$bl_only" != 1 ]; then
       log_command 'ffmpeg -i "%s" -map 0:v:0 -c copy %s -f hevc "%s"' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
       ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc "$output" >&2
     elif check_extension "$input" ".hevc"; then
-      log_command 'dovi_tool demux -b "%s" "%s"' "$(basename "$output")" "$input_name"
-      dovi_tool demux -b "$output" -e "$(tmp_file "$input" 'hevc' "EL")" "$input" >&2
+      log_command 'dovi_tool demux -b "%s"%s "%s"' "$(basename "$output")" "$log_el" "$input_name"
+      dovi_tool demux -b "$output" -e "$el_output" "$input" >&2
     else
-      log_command 'ffmpeg -i "%s" -map 0:v:0 -c copy %s -f hevc - | dovi_tool demux -b "%s" -' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")"
-      ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc - | dovi_tool demux -b "$output" -e "$(tmp_file "$input" 'hevc' "EL")" - >&2
+      log_command 'ffmpeg -i "%s" -map 0:v:0 -c copy %s -f hevc - | dovi_tool demux -b "%s"%s -' "$input_name" "${ffmpeg_cmd[*]}" "$(basename "$output")" "$log_el"
+      ffmpeg -i "$input" -map 0:v:0 -c copy "${ffmpeg_cmd[@]}" -f hevc - | dovi_tool demux -b "$output" -e "$el_output" - >&2
     fi
     log_t "%s for: '%s' extracted - output file: '%s'" "$type" "$input_name" "$output"
   else
     logf "The HEVC file: '%s' already exists, skipping..." "$output"
+    [[ -n "$el_output" ]] && logf "The EL HEVC file: '%s' already exists, skipping..." "$el_output"
   fi
 
   echo "$output"
@@ -442,13 +531,18 @@ rpu_or_sample() {
 }
 
 extract() {
-  local input="$1" short_sample="$2" output_format="$3" output="$4"
+  local input="$1" el="$2" short_sample="$3" output_format="$4" output="$5"
   [[ -z "$output_format" && "$output" == *.* ]] && output_format="${output##*.}"
+
+  if [[ "${output_format,,}" == *mov* ]]; then
+      to_prores "$input" "$el" "$short_sample" "$output" >/dev/null
+      return
+  fi
+
+  [ -n "$el" ] && log_t "%s $B--el$N has effect only for .mov output" "$(yellow 'Warning:')"
 
   if [[ "${output_format,,}" == *hevc* ]]; then
     to_hevc "$input" 0 "$short_sample" "$output" 1 >/dev/null
-  elif [[ "${output_format,,}" == *mov* ]]; then
-    to_prores "$input" "$short_sample" "$output" >/dev/null
   else
     to_rpu "$input" "$short_sample" 0 "$output" 1 "$INFO_INTERMEDIATE" >/dev/null
   fi
@@ -1240,41 +1334,65 @@ fix_rpu_examples() {
   logf "JSON config example saved to '%s'" "$output"
 }
 
-mdl_fps() {
-  local input="$1" mdl="$2" fps="$3" info_fps info_fps_org info_mdl
+detect_mdl() {
+  local input="$1" rpu_input="$2" mdl="$3" mov_input="$4" info_mdl="" rpu_mdl="" rpu_l9=""
 
-  IFS='|' read -r info_fps info_fps_org info_mdl < <(mediainfo "$input" --Inform='Video;%FrameRate_Num%/%FrameRate_Den%|%FrameRate_Original_Num%/%FrameRate_Original_Den%|%MasteringDisplay_ColorPrimaries% %MasteringDisplay_Luminance%\n' | tr -d '\r')
+  [ -n "$mdl" ] && echo "$mdl" && return 0
 
-  if [ -z "$mdl" ]; then
+  if [ "$mov_input" != 1 ] && dovi_input "$rpu_input"; then
+    local rpu=$(to_rpu "$rpu_input" 0 1)
+    local rpu_info=$(dovi_tool info -s "$rpu")
+    rpu_mdl=$(echo "$rpu_info" | grep 'RPU mastering display')
+    rpu_l9=$(echo "$rpu_info" | grep 'L9 MDP')
+  fi
+
+  [[ -z "$rpu_mdl" || -z "$rpu_l9" ]] && info_mdl=$(mediainfo "$input" --Inform="Video;%MasteringDisplay_ColorPrimaries% %MasteringDisplay_Luminance%")
+
+  case "$rpu_mdl" in
+  *4000*) mdl=7 ;;
+  *2000*) mdl=30 ;;
+  *1000*) mdl=20 ;;
+  *) mdl=0 ;;
+  esac
+
+  if ((mdl == 0)); then
     case "$info_mdl" in
     *'max: 1000'*) mdl=20 ;;
     *'max: 2000'*) mdl=30 ;;
     *'max: 4000'*) mdl=7 ;;
-    *) mdl=0 ;;
     esac
-
-    [[ "$info_mdl" == *'2020'* ]] && ((mdl++))
-
-    if ((mdl > 6)); then
-      logf "Detected input MDL: %s" "$mdl"
-    else
-      logf "%s Failed to auto-detect MDL, skipping..." "$(yellow 'Warning:')" && return
-    fi
   fi
 
-  if [ -z "$fps" ]; then
-    [[ -z "$info_fps" || "$info_fps" = "/" ]] && info_fps="$info_fps_org"
+  [ -n "$rpu_l9" ] && info_mdl="$rpu_l9"
+  [[ "$info_mdl" == *'2020'* ]] && ((mdl++))
 
-    fps="${info_fps%"/1"}" && fps="${fps%"/"}"
-
-    if [ -n "$fps" ]; then
-      logf "Detected input FPS: %s" "$fps"
-    else
-      logf "%s Failed to auto-detect FPS, skipping..." "$(yellow 'Warning:')" && return
-    fi
+  if ((mdl > 6)); then
+    logf "Detected input MDL: %s" "$mdl"
+  else
+    logf "%s Failed to auto-detect MDL, skipping..." "$(yellow 'Warning:')" && return
   fi
 
-  echo "$mdl|$fps"
+  echo "$mdl"
+}
+
+detect_fps() {
+  local input="$1" fps="$2" info_fps info_fps_org
+
+  [ -n "$fps" ] && echo "$fps" && return 0
+
+  IFS='|' read -r info_fps info_fps_org < <(mediainfo "$input" --Inform='Video;%FrameRate_Num%/%FrameRate_Den%|%FrameRate_Original_Num%/%FrameRate_Original_Den%\n' | tr -d '\r')
+
+  [[ -z "$info_fps" || "$info_fps" = "/" ]] && info_fps="$info_fps_org"
+
+  fps="${info_fps%"/1"}" && fps="${fps%"/"}"
+
+  if [ -n "$fps" ]; then
+    logf "Detected input FPS: %s" "$fps"
+  else
+    logf "%s Failed to auto-detect FPS, skipping..." "$(yellow 'Warning:')" && return
+  fi
+
+  echo "$fps"
 }
 
 parse_l5() {
@@ -1386,7 +1504,7 @@ generate_variable_l5() {
 }
 
 generate() {
-  local input="$1" scene_cuts="$2" mdl="$3" fps="$4" l5="$5" l5_a="$6" l5v="$7" l5v_a="$8" l6="$9" output="${10}" mov_input prores xml l6 l5_top l5_bottom l5_left l5_right
+  local input="$1" el="$2" scene_cuts="$3" mdl="$4" fps="$5" l5="$6" l5_a="$7" l5v="$8" l5v_a="$9" l6="${10}" output="${11}" mov_input rpu_input prores xml l6 l5_top l5_bottom l5_left l5_right
   check_extension "$input" '.mov' && mov_input=1
 
   [ -z "$l5_a" ] && l5_a="$l5" && [ -z "$l5" ] && l5="auto"
@@ -1396,16 +1514,19 @@ generate() {
   output=$(out_file "$input" "bin" 'GENERATED' "$output")
   [[ -e "$output" ]] && logf "Generated RPU file '%s' already exists, skipping..." "$output" && return
 
-  IFS='|' read -r mdl fps < <(mdl_fps "$input" "$mdl" "$fps")
+  [ "$mov_input" != 1 ] && rpu_input=$(rpu_input "$input" "$el")
+
+  mdl=$(detect_mdl "$input" "$rpu_input" "$mdl" "$mov_input")
+  fps=$(detect_fps "$input" "$fps")
   [[ -z "$mdl" || -z "$fps" ]] && return
 
-  { read -r scene_cuts; read -r l5_a; } < <(scene_cuts_l5 "$input" "$scene_cuts" "$l5_a" "$l5v_a" "$mov_input")
+  { read -r scene_cuts; read -r l5_a; } < <(scene_cuts_l5 "$rpu_input" "$scene_cuts" "$l5_a" "$l5v_a" "$mov_input")
   [[ -z "$scene_cuts" ]] && return
 
   [[ "$l5_a" == file:* ]] && l5v_a="${l5_a#file:}" && l5_a="" || l5v_a=""
   [ "$l5" = 'auto' ] && l5="$l5_a"
 
-  prores=$(to_prores "$input")
+  prores=$(to_prores "$input" "$el" 0 "" "$fps")
   scene_cuts=$(fix_scene_cuts "$prores" "$scene_cuts")
   xml=$(out_file "$input" "xml" 'GENERATED' "$output")
 
@@ -1694,7 +1815,10 @@ inject_hevc() {
       rpu_injected="$rpu_fixed"
     fi
 
-    [ "$raw_rpu" = 1 ] && ! p7_input "$rpu_injected" && p7_input "$input_base" && bl_only=1
+    if [ "$raw_rpu" = 1 ] && p7_input "$input_base"; then
+      ! p7_input "$rpu_injected" && bl_only=1
+      ! fel_input "$rpu_injected" && fel_input "$input_base" && log_t "%s FEL layer will be lost: Injecting non-FEL RPU into FEL input" "$(yellow 'Warning:')"
+    fi
 
     local -r hevc=$(to_hevc "$input_base" "$bl_only") basename=$(basename "$input_base") rpu_basename=$(basename "$rpu_injected")
     log_c "Injecting %s RPU: '%s' into base layer of '%s'..." "${rpu_type,,}" "$rpu_basename" "$basename"
@@ -1718,8 +1842,8 @@ mp4_unremuxable() {
 
   [[ -z "$hevc" ]] && check_extension "$base_file" '.mp4' && return 0
   [[ -n "$(audio_info "$base_file" 0 1)" ]] && echo "'$B$input_type$N' contains lossless audio" && return 1
-  [[ -n "$hevc" ]] && p7_input "$hevc" && echo "'--hevc/-r' contains Dolby Vision Profile 7 layer" && return 1
-  [[ -z "$hevc" ]] && p7_input "$base_file" && echo "'$B$input_type$N' contains Dolby Vision Profile 7 layer" && return 1
+  [[ -n "$hevc" ]] && p7_input "$hevc" && echo "'--hevc/-r' contains DV Profile 7 layer" && return 1
+  [[ -z "$hevc" ]] && p7_input "$base_file" && echo "'$B$input_type$N' contains DV Profile 7 layer" && return 1
 
   return 0
 }
@@ -1954,13 +2078,18 @@ remux() {
 }
 
 inject() {
-  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" l5="$6" l6="$7" cuts_clear="$8" output_format="$9" output="${10}" subs="${11}" title="${12}" fix type
+  local input="$1" input_base="$2" raw_rpu="$3" skip_sync="$4" frame_shift="$5" l5="$6" l6="$7" cuts_clear="$8" output_format="$9" output="${10}" subs="${11}" title="${12}" user_levels="${13}" fix type
 
   check_extension "$input_base" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
   check_extension "$input" '.mkv .mp4 .m2ts .ts .hevc .bin' 1
 
   output_format=$(target_format "$input_base" "$output_format" "$output" '.mkv .mp4 .hevc .bin')
   [[ -n "$l5" || -n "$cuts_clear" || "$FIX_CUTS_FIRST" = 1 || "$FIX_CUTS_CONSEC" = 1 ]] && fix=1
+
+  if [[ -z "$user_levels" && "$raw_rpu" = 0 ]] && fel_input "$input_base"; then
+    RPU_LEVELS="1,2,3,6,8,9,10,11,254"
+    log_t "FEL detected: Overriding default RPU levels to inject with: ($RPU_LEVELS)"
+  fi
 
   [ "$raw_rpu" = 1 ] && type='raw RPU' || type="RPU levels: $RPU_LEVELS"
   log "Injecting $type of '$(basename "$input")' into '$(basename "$input_base")'..." 1
@@ -2211,7 +2340,7 @@ help1() {
 }
 
 help() {
-  local cmd="$1" s b t q i G bin clean multiple_inputs output_info default_l5 default_l6 default_plot_info default_output='generated' default_output_format='auto-detected' default_fps default_langs subs_action="extract"
+  local cmd="$1" s b t q i G E bin clean multiple_inputs output_info default_l5 default_l6 default_plot_info default_output='generated' default_output_format='auto-detected' default_fps default_langs subs_action="extract"
   local -r description=${cmd_description[$cmd]:-$(cmd_info "$cmd")} formats=$(cmd_info "$cmd" 3)
   [[ "$cmd_options" == *b* ]] && b=1
   [[ "$cmd_options" == *t* ]] && t=1 && multiple_inputs='[ignored when multiple inputs]'
@@ -2219,7 +2348,7 @@ help() {
   [[ "$cmd_options" == *G* ]] && default_l5="same as input" || G=1
   [[ "$cmd" != 'plot' && "$cmd_options" == *s* && "${PLOT_DEFAULT,,}" != "none" && "$PLOT_DEFAULT" != 0 ]] && s=1
   [[ "$formats" == *bin* ]] && bin=1
-  [ "$cmd" = 'extract' ] && default_output_format='bin'
+  [ "$cmd" = 'extract' ] && E=1 && default_output_format='bin'
   [ "$cmd" != 'plot' ] && i=1
   [ "$cmd" = 'info' ] && default_output='<print to console>' && default_plot_info="/$B--frames$N" || output_info="$multiple_inputs"
   [ "$cmd" = 'edl' ] && default_fps='23.976'
@@ -2275,6 +2404,8 @@ help() {
                                          [allowed values: ${B}1-6, 8-11, 254, 255$N]
                                          [ignored when $B--raw-rpu$N]"
   help1 "-w, --raw-rpu                   Inject input RPU instead of transferring levels"
+  help1 'E' "--el <FILE>                 EL .hevc [req. ${E:+".mov output + "}matching P7 FEL .hevc BL input]
+                                         $multiple_inputs"
   help1 'G' "--cuts <FILE>               Scene-cuts file path [default: ${B}extracted from input$N]
                                          [supported formats: $B.txt, .edl$N]"
   help1 'G' "--tuning <0-5>              Controls L1 analysis tuning [default: ${B}$L1_TUNING$N]
@@ -2295,7 +2426,7 @@ help() {
                                          $B- 21 / BT_1000$N – 1000-nit BT.2020
                                          $B- 30 / P3_2000$N – 2000-nit P3
                                          $B- 31 / BT_2000$N – 2000-nit BT.2020"
-  help1 'F' "--l5 <T,B[,L,R]>            ${G:+"Set "}Dolby Vision L5 active area offsets
+  help1 'F' "--l5 <T,B[,L,R]>            ${G:+"Set "}DV L5 active area offsets
                                          [defaults: $B${default_l5:-"L=0, R=0"}$N]
                                          <Top, Bottom, Left, Right>"
   help1 'G' "--l5-analysis <T,B[,L,R]>   L5 active area offsets (for analysis only)
@@ -2307,7 +2438,7 @@ help() {
                                          [defaults: ${B}same as --l5v$N]
                                          Use $B--l5v-example$N for sample"
   help1 'G' "--l5v-example               Show example JSON for $B--l5v/--l5v-analysis$N"
-  help1 'F' "--l6 <MAX_CLL,MAX_FALL>     ${G:+"Set "}Dolby Vision L6 MaxCLL/MaxFALL
+  help1 'F' "--l6 <MAX_CLL,MAX_FALL>     ${G:+"Set "}DV L6 MaxCLL/MaxFALL
                                          ${default_l6:+"[default: $B$default_l6$N]"}"
   help1 'S' "--l6-source <FILE>          File path to use for L6 MaxCLL/FALL detection
                                          [supported formats: ${B}.mkv, .mp4, .m2ts, .ts, .hevc, .bin$N]
@@ -2576,7 +2707,7 @@ parse_args() {
 
   local inputs=() input base_input formats input_type output output_format clean_filenames out_dir tmp_dir sample_duration
   local frames frame_shift rpu_levels info plot lang_codes hevc subs find_subs copy_subs copy_audio title title_auto tracks_auto timestamps
-  local cuts_clear cuts_first cuts_consecutive json prores_profile tuning fps mdl scene_cuts l5 l5_a l5v l5v_a l6_source l6 max_y
+  local cuts_clear cuts_first cuts_consecutive json prores_profile tuning fps mdl el scene_cuts l5 l5_a l5v l5v_a l6_source l6 max_y
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2607,6 +2738,7 @@ parse_args() {
     -m | --clean-filenames) clean_filenames=$(parse_option "$2" "$clean_filenames" "$cmd" "$1" 'm' '0, 1') ;;
     -r | --hevc)                       hevc=$(parse_file "$2" "$hevc" "$cmd" "$1" 'r' '.hevc') ;;
     -j | --json)                       json=$(parse_file "$2" "$json" "$cmd" "$1" 'F' '.json') ;;
+    --el)                                el=$(parse_file "$2" "$el" "$cmd" "$1" 'E' '.hevc') ;;
     --cuts)                      scene_cuts=$(parse_file "$2" "$scene_cuts" "$cmd" "$1" 'G' '.txt .edl') ;;
     --l5v)                              l5v=$(parse_file "$2" "$l5v" "$cmd" "$1" 'G' '.json') ;;
     --l5v-analysis)                   l5v_a=$(parse_file "$2" "$l5v_a" "$cmd" "$1" 'G' '.json') ;;
@@ -2649,6 +2781,7 @@ parse_args() {
 
   if [ ${#inputs[@]} -gt 1 ]; then
     [ "$cmd" != 'info' ] && output=$(batch_ignored "$output" '--output/-o')
+    el=$(batch_ignored "$el" '--el')
     subs=$(batch_ignored "$subs" '--subs')
     hevc=$(batch_ignored "$hevc" '--hevc/-r')
     title=$(batch_ignored "$title" '--title')
@@ -2717,10 +2850,10 @@ parse_args() {
     shift) frame_shift "$input" "$base_input" >/dev/null ;;
     sync) sync_rpu "$input" "$base_input" "$frame_shift" 1 "$output" >/dev/null ;;
     fix) fix_rpu "$input" 0 "$cuts_clear" "$l5" "$l6" "" "$l6_source" "$json" "$output" >/dev/null ;;
-    generate) generate "$input" "$scene_cuts" "$mdl" "$fps" "$l5" "$l5_a" "$l5v" "$l5v_a" "$l6" "$output" >/dev/null ;;
-    inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$l5" "$l6" "$cuts_clear" "$output_format" "$output" "$subs" "$title" ;;
+    generate) generate "$input" "$el" "$scene_cuts" "$mdl" "$fps" "$l5" "$l5_a" "$l5v" "$l5v_a" "$l6" "$output" >/dev/null ;;
+    inject) inject "$input" "$base_input" "$rpu_raw" "$skip_sync" "$frame_shift" "$l5" "$l6" "$cuts_clear" "$output_format" "$output" "$subs" "$title" "$rpu_levels" ;;
     remux) remux "$input" "$output_format" "$output" "$hevc" "$subs" "$title" ;;
-    extract) extract "$input" "$sample" "$output_format" "$output" >/dev/null ;;
+    extract) extract "$input" "$el" "$sample" "$output_format" "$output" >/dev/null ;;
     cuts) to_rpu_cuts "$input" "$sample" 0 "$output" 1 >/dev/null ;;
     subs) subs "$input" "$output" ;;
     topsubs) topsubs "$input" "$sample" "$fps" ;;

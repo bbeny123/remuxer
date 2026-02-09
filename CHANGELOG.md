@@ -1,8 +1,8 @@
 ### 2.0.0
 
 - **New commands:**
-    - `fix`: Fix or adjust _Dolby Vision RPU(s)_
-    - `generate`: Generate _Dolby Vision P8 RPU_ for _HDR10_ video(s)
+    - `fix`: Fix or adjust _DV RPU(s)_
+    - `generate`: Generate _DV P8 RPU_ for _HDR10_ video(s)
     - `topsubs`: Extract _top-positioned_ `PGS` subtitles
     - `png`: Extract _video frame(s)_ as `PNG` image(s)
     - `mp3`: Extract _audio track(s)_ as `MP3` file(s)
@@ -16,7 +16,7 @@
     - New option: `--raw-rpu` – injects input RPU (without making hybrid RPU)
 - `extract` **command:**
     - Added support for extracting `.hevc` _base layer_
-    - Added support for converting to **ProRes** (`.mov`)
+    - Added support for converting to **ProRes** (`.mov`) (supports **DV P7 FEL** baking)
 - `plot` **command:**
     - Added support for plotting **L2** and **L8 metadata**
 - Increased max tested offset during frame shift calculation

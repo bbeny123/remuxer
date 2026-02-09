@@ -46,7 +46,7 @@ _remuxer_complete() {
     _remuxer_complete_path "$cur" "mkv mp4 m2ts ts hevc bin" && return ;;
   --cuts)
     _remuxer_complete_path "$cur" "txt edl" && return ;;
-  -r | --hevc)
+  -r | --hevc | --el)
     _remuxer_complete_path "$cur" "hevc" && return ;;
   -j | --json | --l5v | --l5v-analysis)
     _remuxer_complete_path "$cur" "json" && return ;;
@@ -102,10 +102,10 @@ _remuxer_complete() {
   shift) options="--base-input" ;;
   sync) options="--base-input --output --shift --info --plot" ;;
   fix) options="--formats --input-type --output --info --l5 --l6 --l6-source --cuts-clear --cuts-first --cuts-consecutive --json --json-example" ;;
-  generate) options="--formats --input-type --output --sample --info --plot --profile --cuts --tuning --fps --mdl --l5 --l5-analysis --l5v --l5v-analysis --l6 --l5v-example --cuts-clear --cuts-first --cuts-consecutive" ;;
+  generate) options="--formats --input-type --output --sample --info --plot --profile --el --cuts --tuning --fps --mdl --l5 --l5-analysis --l5v --l5v-analysis --l6 --l5v-example --cuts-clear --cuts-first --cuts-consecutive" ;;
   inject) options="--base-input --output --output-format --synced --shift --levels --raw-rpu --info --plot --subs --subs-find --subs-copy --audio-copy --title --title-auto --tracks-auto --clean-filenames --l5 --l6 --cuts-clear --cuts-first --cuts-consecutive" ;;
   remux) options="--formats --input-type --output --output-format --subs --subs-find --subs-copy --audio-copy --hevc --title --title-auto --tracks-auto --clean-filenames" ;;
-  extract) options="--formats --input-type --output --output-format --sample --profile --info --plot" ;;
+  extract) options="--formats --input-type --output --output-format --sample --profile --el --info --plot" ;;
   cuts) options="--formats --input-type --output --sample" ;;
   subs) options="--input-type --output --lang --clean-filenames" ;;
   topsubs) options="--formats --input-type --sample --fps --lang --max-y" ;;
